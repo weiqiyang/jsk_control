@@ -130,9 +130,9 @@ class IpegaStatus(JoyStatus):
         else:
             self.select = False
         if msg.buttons[11] == 1:
-            self.start = True
+            self.center = True
         else:
-            self.start = False
+            self.center = False
         if msg.buttons[13] == 1:
             self.L3 = True
         else:
