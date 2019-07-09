@@ -1,0 +1,58 @@
+<launch>
+  <arg name="CONTROLLER_TYPE" default="auto" />
+  <arg name="DEV" default="/dev/input/js0" />
+  <arg name="POSE_REMAP" default="joy_pose" />
+  <arg name="FRAME_ID" default="AizuSpiderAA/CHASSIS" />
+
+  <arg name="gui" default="true" />
+
+  <node pkg="joy" type="joy_node" name="joy_driver" output="screen" >
+    <param name="dev" type="string" value="$(arg DEV)" />
+    <param name="deadzone" value="0.2" />
+    <param name="autorepeat_rate" value="40" />
+    <param name="coalesce_interval" value="0.025" />
+  </node>
+  <node pkg="jsk_teleop_joy" type="joy.py" name="joy" output="screen"
+        clear_params="true">
+    <param name="controller_type" value="$(arg CONTROLLER_TYPE)" />
+    <rosparam subst_value="true">
+      plugins:
+        'JoyTarget6D':
+           class: 'JoyTarget6D'
+           args:
+             publish_pose: True
+             pose: $(arg POSE_REMAP)
+             frame_id: $(arg FRAME_ID)
+             follow_view: True
+        'Verbose':
+           class: 'VerboseStatus'
+           args:
+             publish_pose: True
+             pose: $(arg POSE_REMAP)
+             frame_id: $(arg FRAME_ID)
+             follow_view: true
+        'Move':
+           class: 'JoyReverseAxis'
+           args:
+             namespace: 'AizuSpiderAA'
+             reverse_x_axis_mode: True
+             reverse_x_axis_mode: True
+             frame_id: $(arg FRAME_ID)
+             follow_view: true
+        'BBoxSelector':
+           class: 'JoyBoundingBoxSelector'
+           args:
+             frame_id: $(arg FRAME_ID)
+             input_boxes: '/cluster_point_indices_decomposer/boxes'
+             output: '/selected_bbox'
+    </rosparam>
+  </node>
+
+  <group if="$(arg gui)">
+    <node name="rviz"
+          pkg="rviz" type="rviz"
+          args="-d $(find jsk_teleop_joy)/launch/config/aizuspider_task2.rviz">
+    </node>
+  </group>
+
+</launch>
