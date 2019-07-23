@@ -27,7 +27,7 @@ class JoyReverseAxis(JSKJoyPlugin):
     self.prev_time = rospy.Time.now()
     self.frame_id = self.getArg('frame_id', 'BODY')
     self.joy_pub = rospy.Publisher(self.getArg('namespace', 'demo_joy')+"/joy",
-                                    Joy, queue_size = 10)
+                                    Joy, queue_size = 20)
     self.command_pub = rospy.Publisher(self.getArg('command', 'command'),
                                     String, queue_size=1)
     
