@@ -170,6 +170,7 @@ class JoyManager():
       self.publishMenu(self.selecting_plugin_index)
     elif history.new(status, "cross") or history.new(status, "center"):
       self.publishMenu(self.selecting_plugin_index, close=True)
+      self.current_plugin.enable()
       self.mode = self.MODE_PLUGIN
     elif history.new(status, "circle"):
       self.publishMenu(self.selecting_plugin_index, close=True)
@@ -183,6 +184,7 @@ class JoyManager():
       self.processMenuMode(status, self.history)
     else:
       if self.history.new(status, "center"):
+        self.current_plugin.disable()
         self.forceToPluginMenu()
       else:
         self.current_plugin.joyCB(status, self.history)
