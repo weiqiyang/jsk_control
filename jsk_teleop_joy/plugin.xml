@@ -38,4 +38,6 @@
   </class>
   <class name="JoyBoundingBoxSelector" type="jsk_teleop_joy.plugin.joy_bounding_box_selector.JoyBoundingBoxSelector">
   </class>
+  <class name="DynamicMenu" type="jsk_teleop_joy.plugin.dynamic_menu.DynamicMenu">
+  </class>
 </library>
