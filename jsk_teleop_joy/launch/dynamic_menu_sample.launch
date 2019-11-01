@@ -3,7 +3,10 @@
   <arg name="DEV" default="/dev/input/js0" />
   <arg name="POSE_REMAP" default="joy_pose" />
   <arg name="FRAME_ID" default="base_footprint" />
-  <rosparam param="history_pose">[[1.0,2.1,0.5],[0.0,0.0,0.0],[0.5, 0.3, -1]]</rosparam>
+  <!-- rosparam param="history_pose">[["POSE 1", 1.0,2.1,0.5],['POSE 0',0.0,0.0,0.0],['POSE 2',0.5, 0.3, -1]]</rosparam -->
+
+  <arg name="gui" default="true" />
+
   <node pkg="joy" type="joy_node" name="joy_driver" output="screen" >
     <param name="dev" type="string" value="$(arg DEV)" />
     <param name="deadzone" value="0.2" />
@@ -16,23 +19,35 @@
     <rosparam subst_value="true">
       plugins:
         'JoyTarget6D':
-           class: 'JoyTarget6D'
-           args:
-             publish_pose: True
-             pose: $(arg POSE_REMAP)
-             frame_id: $(arg FRAME_ID)
-             follow_view: true
-             triangle_cmd: "PREVIEW"
-             circle_cmd: "EXCUTE"
-             cross_cmd: "CANCEL"
+          class: 'JoyTarget6D'
+          args:
+            publish_pose: True
+            pose: $(arg POSE_REMAP)
+            frame_id: $(arg FRAME_ID)
+            follow_view: true
+            triangle_cmd: "PREVIEW"
+            circle_cmd: "EXECUTE"
+            cross_cmd: "CANCEL"
+            save_pose: True
+            pose_list: 'history_pose'
+            list_length: 5
+            save_key: 0
         'SavedPose':
-           class: 'DynamicMenu'
-           args:
-             frame_id: $(arg FRAME_ID)
-             topic: 'dynamic_menu'
-             title: 'PoseList'
-             history: 'history_pose'
-             set_pose: 'set_pose'
+          class: 'DynamicMenu'
+          args:
+            frame_id: $(arg FRAME_ID)
+            topic: 'dynamic_menu'
+            title: 'PoseList'
+            history: 'history_pose'
+            set_pose: 'set_pose'
     </rosparam>
   </node>
+
+  <group if="$(arg gui)">
+    <node name="rviz"
+          pkg="rviz" type="rviz"
+          args="-d $(find jsk_teleop_joy)/launch/config/dynamic_menu_sample.rviz">
+    </node>
+  </group>
+
 </launch>
