@@ -58,7 +58,6 @@ class DynamicMenu(JSKJoyPlugin):
     self.frame_id = self.getArg('frame_id', 'map')
     self.loadItems()
     self.start()
-    #TODO ~history/tag
 
   def loadItems(self):
     if rospy.has_param(self.list_name):
@@ -86,19 +85,16 @@ class DynamicMenu(JSKJoyPlugin):
 
   def publishMenu(self, index, close=False):
     menu = OverlayMenu()
-    menu.menus = [str(i) for i in self.item_instances]
+    menu.menus = [i[0] for i in self.item_instances]
     menu.current_index = index
     menu.title = "PoseList"
     if close:
       menu.action = OverlayMenu.ACTION_CLOSE
     self.menu_pub.publish(menu)
-    #TODO display
 
   def joyCB(self, status, history):
     if history.length() > 0:
       latest = history.latest()
-    #if status.cross:
-    #  self.disable()
     if len(self.item_instances) > 0:
       if history.new(status, "down") or history.new(status, "left_analog_down"):
         self.selecting_item_index = self.selecting_item_index + 1
@@ -113,35 +109,39 @@ class DynamicMenu(JSKJoyPlugin):
         self.publishMenu(self.selecting_item_index)
         self.switchItem(self.selecting_item_index)
       elif status.circle and not latest.circle:
-        # TODO something
-        print("circle")
+        #TODO action circle
+        rospy.loginfo("circle")
       elif status.triangle and not latest.triangle:
-        # TODO execute
-        print("triangle")
+        #TODO action triangle
+        rospy.loginfo("triangle")
       elif status.square and not latest.square:
-        # TODO stop robot
-        print("square")
+        #TODO action square
+        rospy.loginfo("square")
+      #if status.cross:
+      #  
       else:
         self.publishMenu(self.selecting_item_index)
 
   def display(self, item):
-    print(item)
+    rospy.loginfo("Load pose: " + str(item))
     pose = PoseStamped()
     pose.header.frame_id = self.frame_id
     pose.header.stamp = rospy.Time(0.0)
-    pose.pose.position.x = item[0]
-    pose.pose.position.y = item[1]
-    pose.pose.position.z = item[2]
-    pose.pose.orientation.x = 0.0
-    pose.pose.orientation.y = 0.0
-    pose.pose.orientation.z = 0.0
-    pose.pose.orientation.w = 1.0
+    pose.pose.position.x = item[1]
+    pose.pose.position.y = item[2]
+    pose.pose.position.z = item[3]
+    pose.pose.orientation.x = item[4]
+    pose.pose.orientation.y = item[5]
+    pose.pose.orientation.z = item[6]
+    pose.pose.orientation.w = item[7]
     self.pose_pub.publish(pose)
-    #TODO undisplay previous itme, display item
 
   def enable(self):
     self.loadItems()
     self.start()
+    # TODO save the previous pose?
+    self.selecting_item_index = 0
+    self.switchItem(0)
     self.publishMenu(self.selecting_item_index, close=False)
 
   def disable(self):

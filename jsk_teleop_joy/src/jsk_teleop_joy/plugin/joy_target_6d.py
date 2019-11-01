@@ -7,7 +7,6 @@ try:
 except:
   import roslib; roslib.load_manifest('jsk_teleop_joy')
 
-
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
 
@@ -45,7 +44,7 @@ L3+square: load saved pose
 circle/cross/triangle: publish cooperating command
 
 Args:
-publish_pose [Boolean, default: True]: Publish or not pose
+publish_pose [Boolean, default: True]: publish pose or not
 frame_id [String, default: map]: frame_id of publishing pose, this is overwritten by parameter, ~frame_id
 pose [String, default: pose]: topic name for publishing pose
 target_pose [String, default: target_pose]: topic name to pubish current pose when button is pressed
@@ -54,7 +53,15 @@ command [String, default: command]: topic name for publishing the command
 triangle_cmd [String, default: TRIANGLE_CMD]: command text when triangle button is pressed
 circle_cmd [String, default: CIRCLE_CMD]: command text when triangle button is pressed
 cross_cmd [String, default: CROSS_CMD]: command text when triangle button is pressed
+save_pose [Boolean, default: False]: save the pose to a list or not
+pose_list [String, default: history]: rosparam name to save pose list
+list_length [Int32, default: 5]: maximum length of pose_list. will overwrite the oldest data when the list is full
+save_key [Int32, default: 0]: key used to save the pose. 0: circle; 1: triangle; 2: cross
   '''
+  CIRCLE = 0
+  TRIANGLE = 1
+  CROSS = 2
+
   def __init__(self, name, args):
     RVizViewController.__init__(self, name, args)
     self.pre_pose = PoseStamped()
@@ -64,6 +71,7 @@ cross_cmd [String, default: CROSS_CMD]: command text when triangle button is pre
     self.prev_time = rospy.Time.from_sec(time.time())
     self.publish_pose = self.getArg('publish_pose', True)
     self.frame_id = self.getArg('frame_id', 'map')
+    self.count = 0
     
     if self.publish_pose:
       self.pose_pub = rospy.Publisher(self.getArg('pose', 'pose'),
@@ -79,6 +87,13 @@ cross_cmd [String, default: CROSS_CMD]: command text when triangle button is pre
 
     self.pose_sub = rospy.Subscriber(self.getArg('set_pose', 'set_pose'),
                                     PoseStamped, self.setPoseCB)
+    self.save_pose = self.getArg('save_pose', False)
+    if self.save_pose:
+      self.pose_list_name = self.getArg('pose_list', 'history')
+      self.list_length = self.getArg('list_length', 5)
+      self.save_key = self.getArg('save_key', self.CIRCLE)
+      self.init_save_list()
+
     if rospy.has_param('~frame_id'):
       self.frame_id = rospy.get_param('~frame_id')
     self.tf_listener = tf.TransformListener()
@@ -93,6 +108,36 @@ cross_cmd [String, default: CROSS_CMD]: command text when triangle button is pre
   def publish_pose_command(self, pose, command):
     self.target_pub.publish(pose)
     self.command_pub.publish(command)
+
+  def init_save_list(self):
+    if not rospy.has_param(self.pose_list_name):
+      rospy.set_param(self.pose_list_name, [["Origin", 0,0,0,0,0,0,0]])
+    self.item_instances = rospy.get_param(self.pose_list_name)
+    if len(self.item_instances) > self.list_length:
+      self.item_instances = self.item_instances[0:self.list_length]
+
+  def save_current_pose(self, pose):
+    tag = '[' + str(self.count) + '] ' + self.pose_list_name
+    self.count += 1
+    pose_arr = [0] * 8
+    pose_arr[0] = tag
+    pose_arr[1] = pose.pose.position.x
+    pose_arr[2] = pose.pose.position.y
+    pose_arr[3] = pose.pose.position.z
+    pose_arr[4] = pose.pose.orientation.x
+    pose_arr[5] = pose.pose.orientation.y
+    pose_arr[6] = pose.pose.orientation.z
+    pose_arr[7] = pose.pose.orientation.w
+    for i in range(1,8):
+      if type(pose_arr[i]) == type(numpy.float64()):
+        pose_arr[i] = pose_arr[i].item()
+    new_list = [pose_arr]
+    new_list.extend(self.item_instances)
+    if len(new_list) > self.list_length:
+      new_list = new_list[0:self.list_length]
+    self.item_instances = new_list
+    rospy.set_param(self.pose_list_name, self.item_instances)
+    rospy.loginfo("Saved pose: " + str(pose_arr))
 
   def joyCB(self, status, history):
     pre_pose = self.pre_pose
@@ -193,18 +238,27 @@ cross_cmd [String, default: CROSS_CMD]: command text when triangle button is pre
           roll = roll - DTHETA * 2
         else:
           roll = roll - DTHETA
-      if status.triangle and not latest.triangle:
-        self.publish_pose_command(new_pose, self.triangle_cmd)
-      if status.cross and not latest.cross:
-        self.publish_pose_command(new_pose, self.cross_cmd)
     diff_q = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
     new_q = tf.transformations.quaternion_multiply(q, diff_q)
     new_pose.pose.orientation.x = new_q[0]
     new_pose.pose.orientation.y = new_q[1]
     new_pose.pose.orientation.z = new_q[2]
     new_pose.pose.orientation.w = new_q[3]
-    if not (status.R3 and status.R2 and status.L2) and status.circle and not latest.circle:
-      self.publish_pose_command(new_pose, self.circle_cmd)
+
+    # process command keys
+    if not (status.R3 and status.R2 and status.L2):
+      if status.circle and not latest.circle:
+        self.publish_pose_command(new_pose, self.circle_cmd)
+        if self.save_pose and self.save_key == self.CIRCLE:
+          self.save_current_pose(new_pose)
+      if status.triangle and not latest.triangle:
+        self.publish_pose_command(new_pose, self.triangle_cmd)
+        if self.save_pose and self.save_key == self.TRIANGLE:
+          self.save_current_pose(new_pose)
+      if status.cross and not latest.cross:
+        self.publish_pose_command(new_pose, self.cross_cmd)
+        if self.save_pose and self.save_key == self.CROSS:
+          self.save_current_pose(new_pose)
 
     # publish at 10hz
     if self.publish_pose:
