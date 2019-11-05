@@ -14,6 +14,7 @@ except:
   import roslib; roslib.load_manifest('jsk_teleop_joy')
 
 from sensor_msgs.msg import Joy
+from std_msgs.msg import String
 from geometry_msgs.msg import PoseStamped
 from diagnostic_msgs.msg import DiagnosticStatus, DiagnosticArray
 import tf.transformations
@@ -23,6 +24,23 @@ from jsk_rviz_plugins.msg import OverlayMenu
 from status_history import StatusHistory
 
 class DynamicMenu(JSKJoyPlugin):
+  '''
+Usage:
+Up/Down: choose from menu
+
+circle/square/triangle: publish cooperating command
+
+Args:
+frame_id [String, default: map]: frame_id of publishing pose
+title [String, default: PoseList]: title of the menu
+history [String, default: history]: rosparam name to load pose list
+set_pose [String, default: set_pose]: topic name for publishing pose topic to set master
+topic [String, default: dynamic_menu]: topic name to publish the menu
+command [String, default: command]: topic name for publishing the command
+triangle_cmd [String, default: DM_TRIANGLE_CMD]: command text when triangle button is pressed
+circle_cmd [String, default: DM_CIRCLE_CMD]: command text when triangle button is pressed
+square_cmd [String, default: DM_SQUARE_CMD]: command text when triangle button is pressed
+  '''
   STATE_INITIALIZATION = 1
   STATE_RUNNING = 2
   STATE_WAIT_FOR_JOY = 3
@@ -55,7 +73,12 @@ class DynamicMenu(JSKJoyPlugin):
                                       PoseStamped, queue_size=10)
     self.menu_pub = rospy.Publisher(self.getArg('topic', 'dynamic_menu'),
                                       OverlayMenu, queue_size=10)
-    self.frame_id = self.getArg('frame_id', 'map')
+    self.frame_id = self.getArg('frame_id', 'base_footprint')
+    self.command_pub = rospy.Publisher(self.getArg('command', 'command'),
+                                    String, queue_size=1)
+    self.triangle_cmd = self.getArg('triangle_cmd', 'DM_TRIANGLE_CMD')
+    self.square_cmd = self.getArg('square_cmd', 'DM_SQUARE_CMD')
+    self.circle_cmd = self.getArg('circle_cmd', 'DM_CIRCLE_CMD')
     self.loadItems()
     self.start()
 
@@ -110,14 +133,17 @@ class DynamicMenu(JSKJoyPlugin):
         self.switchItem(self.selecting_item_index)
       elif status.circle and not latest.circle:
         #TODO action circle
+        self.command_pub.publish(self.circle_cmd)
         rospy.loginfo("circle")
       elif status.triangle and not latest.triangle:
         #TODO action triangle
+        self.command_pub.publish(self.triangle_cmd)
         rospy.loginfo("triangle")
       elif status.square and not latest.square:
         #TODO action square
+        self.command_pub.publish(self.square_cmd)
         rospy.loginfo("square")
-      #if status.cross:
+      #elif status.cross and not latest.cross:
       #  
       else:
         self.publishMenu(self.selecting_item_index)

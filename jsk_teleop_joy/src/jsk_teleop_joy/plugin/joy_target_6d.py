@@ -50,9 +50,9 @@ pose [String, default: pose]: topic name for publishing pose
 target_pose [String, default: target_pose]: topic name to pubish current pose when button is pressed
 set_pose [String, default: set_pose]: topic name for setting pose by topic
 command [String, default: command]: topic name for publishing the command
-triangle_cmd [String, default: TRIANGLE_CMD]: command text when triangle button is pressed
-circle_cmd [String, default: CIRCLE_CMD]: command text when triangle button is pressed
-cross_cmd [String, default: CROSS_CMD]: command text when triangle button is pressed
+triangle_cmd [String, default: TP_TRIANGLE_CMD]: command text when triangle button is pressed
+circle_cmd [String, default: TP_CIRCLE_CMD]: command text when triangle button is pressed
+cross_cmd [String, default: TP_CROSS_CMD]: command text when triangle button is pressed
 save_pose [Boolean, default: False]: save the pose to a list or not
 pose_list [String, default: history]: rosparam name to save pose list
 list_length [Int32, default: 5]: maximum length of pose_list. will overwrite the oldest data when the list is full
@@ -80,9 +80,9 @@ save_key [Int32, default: 0]: key used to save the pose. 0: circle; 1: triangle;
                                     PoseStamped, queue_size=1)
     self.command_pub = rospy.Publisher(self.getArg('command', 'command'),
                                     String, queue_size=1)
-    self.triangle_cmd = self.getArg('triangle_cmd', 'TRIANGLE_CMD')
-    self.cross_cmd = self.getArg('cross_cmd', 'CROSS_CMD')
-    self.circle_cmd = self.getArg('circle_cmd', 'CIRCLE_CMD')
+    self.triangle_cmd = self.getArg('triangle_cmd', 'TP_TRIANGLE_CMD')
+    self.cross_cmd = self.getArg('cross_cmd', 'TP_CROSS_CMD')
+    self.circle_cmd = self.getArg('circle_cmd', 'TP_CIRCLE_CMD')
     self.supportFollowView(True)
 
     self.pose_sub = rospy.Subscriber(self.getArg('set_pose', 'set_pose'),

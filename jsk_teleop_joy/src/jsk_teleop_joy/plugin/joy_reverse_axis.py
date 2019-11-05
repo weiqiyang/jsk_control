@@ -29,9 +29,9 @@ reverse_ly_axis_mode [Boolean, default: True]: reverse left analog y value or no
 reverse_rx_axis_mode [Boolean, default: False]: reverse right analog x value or not
 reverse_ry_axis_mode [Boolean, default: False]: reverse right analog y value or not
 command [String, default: command]: topic name for publishing the command
-triangle_cmd' [String, default: TRIANGLE_CMD]: command text when triangle button is pressed
-circle_cmd' [String, default: CIRCLE_CMD]: command text when triangle button is pressed
-cross_cmd' [String, default: CROSS_CMD]: command text when triangle button is pressed
+triangle_cmd' [String, default: RA_TRIANGLE_CMD]: command text when triangle button is pressed
+circle_cmd' [String, default: RA_CIRCLE_CMD]: command text when triangle button is pressed
+cross_cmd' [String, default: RA_CROSS_CMD]: command text when triangle button is pressed
   '''
   #def __init__(self, name='JoyPose6D', publish_pose=True):
   def __init__(self, name, args):
@@ -46,9 +46,9 @@ cross_cmd' [String, default: CROSS_CMD]: command text when triangle button is pr
                                     Joy, queue_size = 20)
     self.command_pub = rospy.Publisher(self.getArg('command', 'command'),
                                     String, queue_size=1)
-    self.triangle_cmd = self.getArg('triangle_cmd', 'TRIANGLE_CMD')
-    self.cross_cmd = self.getArg('cross_cmd', 'CROSS_CMD')
-    self.circle_cmd = self.getArg('circle_cmd', 'CIRCLE_CMD')
+    self.triangle_cmd = self.getArg('triangle_cmd', 'RA_TRIANGLE_CMD')
+    self.cross_cmd = self.getArg('cross_cmd', 'RA_CROSS_CMD')
+    self.circle_cmd = self.getArg('circle_cmd', 'RA_CIRCLE_CMD')
     
   def joyCB(self, status, history):
     self.new_joy = status.toPS3Msg()

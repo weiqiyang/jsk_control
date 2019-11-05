@@ -44,9 +44,9 @@ target_pose [String, default: target_pose]: topic name to pubish current pose wh
 set_base [String, default: set_base]: topic name for setting base pose by topic
 z [float, default: 0.0]: initial value for z, overwritten by arg set_base
 command [String, default: command]: topic name for publishing the command
-triangle_cmd [String, default: TRIANGLE_CMD]: command text when triangle button is pressed
-circle_cmd [String, default: CIRCLE_CMD]: command text when triangle button is pressed
-cross_cmd [String, default: CROSS_CMD]: command text when triangle button is pressed
+triangle_cmd [String, default: BP_TRIANGLE_CMD]: command text when triangle button is pressed
+circle_cmd [String, default: BP_CIRCLE_CMD]: command text when triangle button is pressed
+cross_cmd [String, default: BP_CROSS_CMD]: command text when triangle button is pressed
   '''
   #def __init__(self, name='JoyPose6D', publish_pose=True):
   def __init__(self, name, args):
@@ -71,9 +71,9 @@ cross_cmd [String, default: CROSS_CMD]: command text when triangle button is pre
     if self.publish_pose:
       self.pose_pub = rospy.Publisher(self.getArg('goal', 'joy_base_pose'),
                                       PoseStamped, queue_size=1)
-    self.triangle_cmd = self.getArg('triangle_cmd', 'TRIANGLE_CMD')
-    self.cross_cmd = self.getArg('cross_cmd', 'CROSS_CMD')
-    self.circle_cmd = self.getArg('circle_cmd', 'CIRCLE_CMD')
+    self.triangle_cmd = self.getArg('triangle_cmd', 'BP_TRIANGLE_CMD')
+    self.cross_cmd = self.getArg('cross_cmd', 'BP_CROSS_CMD')
+    self.circle_cmd = self.getArg('circle_cmd', 'BP_CIRCLE_CMD')
     self.supportFollowView(True)
     self.pose_sub = rospy.Subscriber(self.getArg('set_base', 'set_base'),
                                      PoseStamped, self.setPoseCB, queue_size=1)

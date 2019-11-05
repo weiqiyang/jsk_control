@@ -41,9 +41,9 @@ frame_id [String, default: map]: frame_id of publishing pose, overwritten by par
 input_boxes [String, default: cluster_point_indices/boxes]: topic name of the bounding box array
 output [String, default: selected_bbox]: topic name to pubish the selected bounding box
 command [String, default: command]: topic name to publish commands
-triangle_cmd [String, default: TRIANGLE_CMD]: command text when triangle button is pressed
-circle_cmd [String, default: CIRCLE_CMD]: command text when triangle button is pressed
-cross_cmd [String, default: CROSS_CMD]: command text when triangle button is pressed
+triangle_cmd [String, default: BBS_TRIANGLE_CMD]: command text when triangle button is pressed
+circle_cmd [String, default: BBS_CIRCLE_CMD]: command text when triangle button is pressed
+cross_cmd [String, default: BBS_CROSS_CMD]: command text when triangle button is pressed
   '''
   def __init__(self, name, args):
     RVizViewController.__init__(self, name, args)
@@ -59,9 +59,9 @@ cross_cmd [String, default: CROSS_CMD]: command text when triangle button is pre
                                     BoundingBox, queue_size=1)
     self.command_pub = rospy.Publisher(self.getArg('command', 'command'),
                                     String, queue_size=1)
-    self.triangle_cmd = self.getArg('triangle_cmd', 'TRIANGLE_CMD')
-    self.cross_cmd = self.getArg('cross_cmd', 'CROSS_CMD')
-    self.circle_cmd = self.getArg('circle_cmd', 'CIRCLE_CMD')
+    self.triangle_cmd = self.getArg('triangle_cmd', 'BBS_TRIANGLE_CMD')
+    self.cross_cmd = self.getArg('cross_cmd', 'BBS_CROSS_CMD')
+    self.circle_cmd = self.getArg('circle_cmd', 'BBS_CIRCLE_CMD')
 
     self.supportFollowView(True)
 
