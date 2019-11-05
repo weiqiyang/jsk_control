@@ -74,11 +74,13 @@ square_cmd [String, default: DM_SQUARE_CMD]: command text when triangle button i
     self.menu_pub = rospy.Publisher(self.getArg('topic', 'dynamic_menu'),
                                       OverlayMenu, queue_size=10)
     self.frame_id = self.getArg('frame_id', 'base_footprint')
+
     self.command_pub = rospy.Publisher(self.getArg('command', 'command'),
                                     String, queue_size=1)
     self.triangle_cmd = self.getArg('triangle_cmd', 'DM_TRIANGLE_CMD')
     self.square_cmd = self.getArg('square_cmd', 'DM_SQUARE_CMD')
     self.circle_cmd = self.getArg('circle_cmd', 'DM_CIRCLE_CMD')
+
     self.loadItems()
     self.start()
 
