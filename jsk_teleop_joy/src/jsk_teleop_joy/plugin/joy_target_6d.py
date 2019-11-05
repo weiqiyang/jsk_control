@@ -86,7 +86,7 @@ save_key [Int32, default: 0]: key used to save the pose. 0: circle; 1: triangle;
     self.supportFollowView(True)
 
     self.pose_sub = rospy.Subscriber(self.getArg('set_pose', 'set_pose'),
-                                    PoseStamped, self.setPoseCB)
+                                    PoseStamped, self.setPoseCB, queue_size=1)
     self.save_pose = self.getArg('save_pose', False)
     if self.save_pose:
       self.pose_list_name = self.getArg('pose_list', 'history')
@@ -110,7 +110,7 @@ save_key [Int32, default: 0]: key used to save the pose. 0: circle; 1: triangle;
     self.command_pub.publish(command)
 
   def init_save_list(self):
-    if not rospy.has_param(self.pose_list_name):
+    if not rospy.has_param(self.pose_list_name) or len(rospy.get_param(self.pose_list_name)) < 1:
       rospy.set_param(self.pose_list_name, [["Origin", 0,0,0,0,0,0,0]])
     self.item_instances = rospy.get_param(self.pose_list_name)
     if len(self.item_instances) > self.list_length:
@@ -137,7 +137,7 @@ save_key [Int32, default: 0]: key used to save the pose. 0: circle; 1: triangle;
       new_list = new_list[0:self.list_length]
     self.item_instances = new_list
     rospy.set_param(self.pose_list_name, self.item_instances)
-    rospy.loginfo("Saved pose: " + str(pose_arr))
+    rospy.loginfo("Saved target pose: " + str(pose_arr))
 
   def joyCB(self, status, history):
     pre_pose = self.pre_pose
