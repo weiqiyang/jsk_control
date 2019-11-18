@@ -40,6 +40,11 @@
             title: 'PoseList'
             history: 'history_pose'
             set_pose: 'set_pose'
+        'SimpleGoSpot':
+          class: 'HsrbSimpleGoSpot'
+          args:
+            prefix: '/eng8/6f/room610-'
+            topic: 'dynamic_menu'
     </rosparam>
   </node>
 
