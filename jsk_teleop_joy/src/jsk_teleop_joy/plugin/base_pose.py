@@ -47,10 +47,9 @@ command [String, default: command]: topic name for publishing the command
 triangle_cmd [String, default: BP_TRIANGLE_CMD]: command text when triangle button is pressed
 circle_cmd [String, default: BP_CIRCLE_CMD]: command text when triangle button is pressed
 cross_cmd [String, default: BP_CROSS_CMD]: command text when triangle button is pressed
-save_pose [Boolean, default: False]: save the pose to a list or not
+save_key [Int32, default: -1]: key used to save the pose. -1: do not save; 0: circle; 1: triangle; 2: cross
 pose_list [String, default: history]: rosparam name to save pose list
 list_length [Int32, default: 5]: maximum length of pose_list. will overwrite the oldest data when the list is full
-save_key [Int32, default: 0]: key used to save the pose. 0: circle; 1: triangle; 2: cross
   '''
   CIRCLE = 0
   TRIANGLE = 1
@@ -103,11 +102,10 @@ save_key [Int32, default: 0]: key used to save the pose. 0: circle; 1: triangle;
         continue
       break
 
-    self.save_pose = self.getArg('save_pose', False)
-    if self.save_pose:
+    self.save_key = self.getArg('save_key', -1)
+    if self.save_key > -1:
       self.pose_list_name = self.getArg('pose_list', 'history')
       self.list_length = self.getArg('list_length', 5)
-      self.save_key = self.getArg('save_key', self.CIRCLE)
       self.init_save_list()
     rospy.loginfo("End loading base_pose")
 
@@ -230,15 +228,15 @@ save_key [Int32, default: 0]: key used to save the pose. 0: circle; 1: triangle;
     if not (status.R3 and status.R2 and status.L2):
       if status.circle and not latest.circle:
         self.publish_goal_command(new_pose, self.circle_cmd)
-        if self.save_pose and self.save_key == self.CIRCLE:
+        if self.save_key == self.CIRCLE:
           self.save_current_pose(new_pose)
       if status.triangle and not latest.triangle:
         self.publish_pose_command(new_pose, self.triangle_cmd)
-        if self.save_pose and self.save_key == self.TRIANGLE:
+        if self.save_key == self.TRIANGLE:
           self.save_current_pose(new_pose)
       if status.cross and not latest.cross:
         self.publish_pose_command(new_pose, self.cross_cmd)
-        if self.save_pose and self.save_key == self.CROSS:
+        if self.save_key == self.CROSS:
           self.save_current_pose(new_pose)
 
     # publish at 10hz
