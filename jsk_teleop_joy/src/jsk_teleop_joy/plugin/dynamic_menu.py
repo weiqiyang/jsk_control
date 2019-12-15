@@ -38,8 +38,8 @@ set_pose [String, default: set_pose]: topic name for publishing pose topic to se
 topic [String, default: dynamic_menu]: topic name to publish the menu
 command [String, default: command]: topic name for publishing the command
 triangle_cmd [String, default: DM_TRIANGLE_CMD]: command text when triangle button is pressed
-circle_cmd [String, default: DM_CIRCLE_CMD]: command text when triangle button is pressed
-square_cmd [String, default: DM_SQUARE_CMD]: command text when triangle button is pressed
+circle_cmd [String, default: DM_CIRCLE_CMD]: command text when circle button is pressed
+square_cmd [String, default: DM_SQUARE_CMD]: command text when suqare button is pressed
   '''
   STATE_INITIALIZATION = 1
   STATE_RUNNING = 2
