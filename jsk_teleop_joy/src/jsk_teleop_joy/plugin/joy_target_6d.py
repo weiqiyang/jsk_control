@@ -1,12 +1,5 @@
 from joy_rviz_view_controller import RVizViewController
 
-import imp
-import copy
-try:
-  imp.find_module("geometry_msgs")
-except:
-  import roslib; roslib.load_manifest('jsk_teleop_joy')
-
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
 
@@ -14,8 +7,6 @@ import tf
 import rospy
 import numpy
 import math
-import tf
-import numpy
 import time
 
 def signedSquare(val):
@@ -41,7 +32,7 @@ R3(Right Analog button): suppressing buttons/sticks for controlling pose
 L3+circle: save current pose
 L3+square: load saved pose
 
-circle/cross/triangle: publish cooperating command
+circle/cross/triangle: publish corresponding command
 
 Args:
 publish_pose [Boolean, default: True]: publish pose or not
@@ -51,8 +42,8 @@ target_pose [String, default: target_pose]: topic name to pubish current pose wh
 set_pose [String, default: set_pose]: topic name for setting pose by topic
 command [String, default: command]: topic name for publishing the command
 triangle_cmd [String, default: TP_TRIANGLE_CMD]: command text when triangle button is pressed
-circle_cmd [String, default: TP_CIRCLE_CMD]: command text when triangle button is pressed
-cross_cmd [String, default: TP_CROSS_CMD]: command text when triangle button is pressed
+circle_cmd [String, default: TP_CIRCLE_CMD]: command text when circle button is pressed
+cross_cmd [String, default: TP_CROSS_CMD]: command text when cross button is pressed
 save_key [Int32, default: -1]: key used to save the pose. -1: do not save; 0: circle; 1: triangle; 2: cross
 pose_list [String, default: history]: rosparam name to save pose list
 list_length [Int32, default: 5]: maximum length of pose_list. will overwrite the oldest data when the list is full

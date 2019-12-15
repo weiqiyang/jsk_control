@@ -1,13 +1,8 @@
 from joy_rviz_view_controller import RVizViewController
 
-import imp
-try:
-  imp.find_module("geometry_msgs")
-except:
-  import roslib; roslib.load_manifest('jsk_teleop_joy')
-
 from std_msgs.msg import String
 from geometry_msgs.msg import PoseStamped
+
 import tf
 import rospy
 import numpy
@@ -34,7 +29,7 @@ Right Analog x/y: yaw/pitch of camera position (see parent class, RVizViewContro
 R3(Right Analog button): suppressing buttons/sticks for controlling pose
    R3 + L2 + R2: enable follow view mode
 
-circle/cross/triangle: publish cooperating command
+circle/cross/triangle: publish corresponding command
 
 Args:
 frame_id [String, default: map]: frame_id of publishing pose, overwritten by parameter ~frame_id
@@ -42,8 +37,8 @@ input_boxes [String, default: cluster_point_indices/boxes]: topic name of the bo
 output [String, default: selected_bbox]: topic name to pubish the selected bounding box
 command [String, default: command]: topic name to publish commands
 triangle_cmd [String, default: BBS_TRIANGLE_CMD]: command text when triangle button is pressed
-circle_cmd [String, default: BBS_CIRCLE_CMD]: command text when triangle button is pressed
-cross_cmd [String, default: BBS_CROSS_CMD]: command text when triangle button is pressed
+circle_cmd [String, default: BBS_CIRCLE_CMD]: command text when circle button is pressed
+cross_cmd [String, default: BBS_CROSS_CMD]: command text when cross button is pressed
   '''
   def __init__(self, name, args):
     RVizViewController.__init__(self, name, args)

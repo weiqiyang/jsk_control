@@ -1,11 +1,5 @@
 from joy_rviz_view_controller import RVizViewController
 
-import imp
-try:
-  imp.find_module("geometry_msgs")
-except:
-  import roslib; roslib.load_manifest('jsk_teleop_joy')
-
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
 
@@ -33,7 +27,7 @@ Right Analog x/y: yaw/pitch of camera position (see parent class, RVizViewContro
 R3(Right Analog button): suppressing buttons/sticks for controlling pose
    R3 + L2 + R2: enable follow view mode
 
-circle/cross/triangle: publish cooperating command
+circle/cross/triangle: publish corresponding command
 
 Args:
 publish_pose [Boolean, default: True]: publish pose or not
@@ -45,8 +39,8 @@ set_base [String, default: set_base]: topic name for setting base pose by topic
 z [float, default: 0.0]: initial value for z, overwritten by arg set_base
 command [String, default: command]: topic name for publishing the command
 triangle_cmd [String, default: BP_TRIANGLE_CMD]: command text when triangle button is pressed
-circle_cmd [String, default: BP_CIRCLE_CMD]: command text when triangle button is pressed
-cross_cmd [String, default: BP_CROSS_CMD]: command text when triangle button is pressed
+circle_cmd [String, default: BP_CIRCLE_CMD]: command text when circle button is pressed
+cross_cmd [String, default: BP_CROSS_CMD]: command text when cross button is pressed
 save_key [Int32, default: -1]: key used to save the pose. -1: do not save; 0: circle; 1: triangle; 2: cross
 pose_list [String, default: history]: rosparam name to save pose list
 list_length [Int32, default: 5]: maximum length of pose_list. will overwrite the oldest data when the list is full

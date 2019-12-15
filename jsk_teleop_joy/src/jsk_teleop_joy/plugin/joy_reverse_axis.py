@@ -1,13 +1,8 @@
 from jsk_teleop_joy.joy_plugin import JSKJoyPlugin
 
-import imp
-try:
-  imp.find_module("geometry_msgs")
-except:
-  import roslib; roslib.load_manifest('jsk_teleop_joy')
-
 from std_msgs.msg import String
 from sensor_msgs.msg import Joy
+
 import tf
 import rospy
 import numpy
@@ -20,7 +15,7 @@ Usage:
 This plugin reads in the analog axis value and reverses the selected ones.
 It is supposed to be used together with the default joy teleop controls.
 
-circle/cross/triangle: publish cooperating command
+circle/cross/triangle: publish corresponding command
 
 Args:
 namespace [String, default: demojoy]: namespace for the new joy topic
@@ -30,8 +25,8 @@ reverse_rx_axis_mode [Boolean, default: False]: reverse right analog x value or 
 reverse_ry_axis_mode [Boolean, default: False]: reverse right analog y value or not
 command [String, default: command]: topic name for publishing the command
 triangle_cmd' [String, default: RA_TRIANGLE_CMD]: command text when triangle button is pressed
-circle_cmd' [String, default: RA_CIRCLE_CMD]: command text when triangle button is pressed
-cross_cmd' [String, default: RA_CROSS_CMD]: command text when triangle button is pressed
+circle_cmd' [String, default: RA_CIRCLE_CMD]: command text when circle button is pressed
+cross_cmd' [String, default: RA_CROSS_CMD]: command text when cross button is pressed
   '''
   #def __init__(self, name='JoyPose6D', publish_pose=True):
   def __init__(self, name, args):
