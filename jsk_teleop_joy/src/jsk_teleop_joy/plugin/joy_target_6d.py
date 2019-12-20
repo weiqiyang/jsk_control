@@ -246,7 +246,7 @@ list_length [Int32, default: 5]: maximum length of pose_list. will overwrite the
           self.save_current_pose(new_pose)
       if status.cross and not latest.cross:
         self.publish_pose_command(new_pose, self.cross_cmd)
-        if and self.save_key == self.CROSS:
+        if self.save_key == self.CROSS:
           self.save_current_pose(new_pose)
 
     # publish at 10hz
