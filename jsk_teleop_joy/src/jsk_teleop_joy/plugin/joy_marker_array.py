@@ -49,6 +49,7 @@ lock_xy [Boolean, default: False]: to keep x,y scale equal or not
 frame_id [String, default: map]: frame_id of publishing pose
 namespace [String, default: joy_markers]: namespace to publish the marker
 type [Int, default: 3]: type of the marker, cylinder by default
+show_label [Boolean, default: False]: display labels for marks or not
   '''
   STATE_INITIALIZATION = 1
   STATE_RUNNING = 2
@@ -90,6 +91,7 @@ type [Int, default: 3]: type of the marker, cylinder by default
     self.lock_xy = self.getArg('lock_xy', False)
     self.type = self.getArg('type', 3)
     self.namespace = self.getArg('namespace', 'joy_markers')
+    self.show_label = self.getArg('show_label', False)
 
     #TODO self.loadMarkers()
     self.start()
@@ -522,6 +524,25 @@ type [Int, default: 3]: type of the marker, cylinder by default
     t = rospy.Time(0)
     for m in self.markers.markers:
       m.header.stamp = t
+    if self.show_label:
+      labels = copy.deepcopy(self.markers)
+      for m, txt in zip(labels.markers, self.menu_list):
+        # no label for route line
+        if m.type == 4:
+          break
+        # TEXT_VIEW_FACING=9
+        m.type = 9
+        m.ns = self.namespace + "_label"
+        m.text = txt
+        m.pose.position.z += m.scale.z
+        m.scale.x = 0.2
+        m.scale.y = 0.2
+        m.scale.z = 0.2
+        m.color.r = 1.0
+        m.color.g = 1.0
+        m.color.b = 1.0
+        m.color.a = 1.0
+      self.marker_array_pub.publish(labels)
     self.marker_array_pub.publish(self.markers)
 
   def publishHelp(self):

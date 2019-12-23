@@ -29,7 +29,8 @@
             namespace: "cylinder_array"
             frame_id: $(arg FRAME_ID)
             follow_view: true
-            set_marker: "set_marker"
+            marker_pose: "marker_pose"
+            show_label: True
     </rosparam>
   </node>
 
