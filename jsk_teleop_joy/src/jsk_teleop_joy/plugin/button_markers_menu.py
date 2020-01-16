@@ -34,7 +34,7 @@ def signedSquare(val):
    sign = -1
  return val * val * sign
 
-class JoyMarkerArray(JSKJoyPlugin):
+class ButtonMarkersMenu(JSKJoyPlugin):
   '''
 Usage:
 Check publishHelp() for controller configurations.
@@ -49,7 +49,7 @@ help_text [String, default: help_text]: topic name to publish overlay help text
 lock_xy [Boolean, default: False]: to keep x,y scale equal or not
 frame_id [String, default: map]: frame_id of publishing pose
 namespace [String, default: joy_markers]: namespace to publish the marker
-type [Int, default: 3]: type of the marker, cylinder by default
+type [Int, default: 1]: type of the marker, cube by default
 show_label [Boolean, default: False]: display labels for marks or not
   '''
   STATE_INITIALIZATION = 1
@@ -58,8 +58,9 @@ show_label [Boolean, default: False]: display labels for marks or not
 
   MODE_MENU = 0
   MODE_MARKER = 1
-  MODE_DELETE = 2
-  MODE_UNSAVED = 3
+  MODE_EXECUTE = 2
+  MODE_DELETE = 3
+  MODE_UNSAVED = 4
   mode = 0
 
   markers = MarkerArray()
@@ -88,17 +89,27 @@ show_label [Boolean, default: False]: display labels for marks or not
                                       MarkerArray, queue_size=10)
     self.command_pub = rospy.Publisher(self.getArg('command', 'command'),
                                       String, queue_size=1)
+    self.target_pub = rospy.Publisher(self.getArg('target_pose', 'target_pose'),
+                                    PoseStamped, queue_size=1)
     self.marker_sub = rospy.Subscriber(self.getArg('set_marker', 'set_marker'),
                                       BoundingBox, self.setMarkerCB, queue_size=1)
+    self.button_sub_topic = self.getArg('set_button', 'set_button')
     self.help_pub = rospy.Publisher(self.getArg('help_text', 'help_text'),
                                       OverlayText, queue_size=1)
     self.frame_id = self.getArg('frame_id', 'map')
+    self.base_frame_id = self.getArg('base_frame_id', 'base_footprint')
     self.lock_xy = self.getArg('lock_xy', False)
-    self.type = self.getArg('type', 3)
+    self.type = self.getArg('type', 1)
+    # note: hsr inner off-set is 0.065
+    self.offset = self.getArg('offset', 0.1)
     self.namespace = self.getArg('namespace', 'joy_markers')
     self.show_label = self.getArg('show_label', False)
+    self.circle_cmd = self.getArg('circle_cmd', 'BUTTON_CIRCLE')
+    self.triangle_cmd = self.getArg('triangle_cmd', 'BUTTON_TRIANGLE')
+    self.press_cmd = self.getArg('circle_cmd', 'BUTTON_PRESS')
 
     #TODO self.loadMarkers()
+    self.tf_listener = tf.TransformListener()
     self.start()
 
   def start(self):
@@ -109,6 +120,10 @@ show_label [Boolean, default: False]: display labels for marks or not
     else:
       self.current_marker = self.markers.markers[0]
     return True
+
+  def publish_pose_command(self, pose, command):
+    self.target_pub.publish(pose)
+    self.command_pub.publish(command)
 
   def publishMenu(self, index, close=False):
     menu = OverlayMenu()
@@ -145,9 +160,11 @@ show_label [Boolean, default: False]: display labels for marks or not
           #TODO preview ik
           rospy.logdebug("preview ik")
         if not latest.triangle:
-          #TODO show marker route (lifetime 5s)
-          rospy.logdebug("show route")
-          self.showRoute()
+          # execution mode
+          if not self.current_marker == None:
+            self.publishMenu(self.selecting_index, close=True)
+            self.initButtonPose(self.current_marker)
+            self.mode = self.MODE_EXECUTE
       else:
         if history.new(status, "down") or history.new(status, "left_analog_down"):
           self.selecting_index = self.selecting_index + 1
@@ -181,6 +198,8 @@ show_label [Boolean, default: False]: display labels for marks or not
         self.publishHelp()
     elif self.mode == self.MODE_MARKER:
       self.markerJoyCB(status, history)
+    elif self.mode == self.MODE_EXECUTE:
+      self.poseJoyCB(status, history)
     elif self.mode == self.MODE_DELETE:
       if history.new(status, "down") or history.new(status, "left_analog_down") \
         or history.new(status, "up") or history.new(status, "left_analog_up"):
@@ -415,7 +434,7 @@ show_label [Boolean, default: False]: display labels for marks or not
               m.type = self.type
           else:
             marker.scale.x *= 0.6
-
+          
         # keep minimun scale value
         if not marker.scale.x > 0:
           marker.scale.x = DSCALE
@@ -432,32 +451,18 @@ show_label [Boolean, default: False]: display labels for marks or not
         if status.left:
           if status.square:
             yaw = yaw + DTHETA * 5
-          elif history.all(lambda s: s.L1):
+          elif history.all(lambda s: s.left):
             yaw = yaw + DTHETA * 2
           else:
             yaw = yaw + DTHETA
         elif status.right:
           if status.square:
             yaw = yaw - DTHETA * 5
-          elif history.all(lambda s: s.R1):
+          elif history.all(lambda s: s.right):
             yaw = yaw - DTHETA * 2
           else:
             yaw = yaw - DTHETA
       else:
-        if status.up:
-          if status.square:
-            pitch = pitch + DTHETA * 5
-          elif history.all(lambda s: s.up):
-            pitch = pitch + DTHETA * 2
-          else:
-            pitch = pitch + DTHETA
-        elif status.down:
-          if status.square:
-            pitch = pitch - DTHETA * 5
-          elif history.all(lambda s: s.down):
-            pitch = pitch - DTHETA * 2
-          else:
-            pitch = pitch - DTHETA
         if status.right:
           if status.square:
             roll = roll + DTHETA * 5
@@ -472,6 +477,20 @@ show_label [Boolean, default: False]: display labels for marks or not
             roll = roll - DTHETA * 2
           else:
             roll = roll - DTHETA
+        if status.up:
+          if status.square:
+            pitch = pitch + DTHETA * 5
+          elif history.all(lambda s: s.up):
+            pitch = pitch + DTHETA * 2
+          else:
+            pitch = pitch + DTHETA
+        elif status.down:
+          if status.square:
+            pitch = pitch - DTHETA * 5
+          elif history.all(lambda s: s.down):
+            pitch = pitch - DTHETA * 2
+          else:
+            pitch = pitch - DTHETA
     diff_q = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
     new_q = tf.transformations.quaternion_multiply(q, diff_q)
     new_pose.pose.orientation.x = new_q[0]
@@ -514,6 +533,158 @@ show_label [Boolean, default: False]: display labels for marks or not
         self.mode = self.MODE_UNSAVED
         self.publishHelp()
 
+  def initButtonPose(self, marker):
+    pose = copy.deepcopy(marker.pose)
+    local_move = numpy.array((0.0, 0.0, self.offset, 1.0))
+    q = numpy.array((pose.orientation.x,
+                     pose.orientation.y,
+                     pose.orientation.z,
+                     pose.orientation.w))
+    move = numpy.dot(tf.transformations.quaternion_matrix(q),
+                     local_move)
+    pose.position.x += move[0]
+    pose.position.y += move[1]
+    pose.position.z += move[2]
+    diff_q = tf.transformations.quaternion_from_euler(0.0, math.pi/2.0, 0.0)
+    new_q = tf.transformations.quaternion_multiply(q, diff_q)
+    pose.orientation.x = new_q[0]
+    pose.orientation.y = new_q[1]
+    pose.orientation.z = new_q[2]
+    pose.orientation.w = new_q[3]
+    self.pre_pose.pose = pose
+
+  def poseJoyCB(self, status, history):
+    pre_pose = self.pre_pose
+    if history.length() > 0:
+      latest = history.latest()
+      if status.R3 and status.L2 and status.R2 and not (latest.R3 and latest.L2 and latest.R2):
+        self.view_controller.followView(not view_controller.followView())
+    if self.view_controller.control_view:
+      self.view_controller.joyCB(status, history)
+    new_pose = PoseStamped()
+    new_pose.header.frame_id = self.frame_id
+    new_pose.header.stamp = rospy.Time(0.0)
+    # move in local
+    if not status.R3:
+      # xy
+      if status.square:
+        scale = 20.0
+      else:
+        dist = status.left_analog_y * status.left_analog_y + status.left_analog_x * status.left_analog_x
+        if dist > 0.9:
+          scale = 50.0
+        else:
+          scale = 80.0
+      x_diff = signedSquare(status.left_analog_y) / scale
+      y_diff = signedSquare(status.left_analog_x) / scale
+      # z
+      if status.L2:
+        z_diff = 0.005
+      elif status.R2:
+        z_diff = -0.005
+      else:
+        z_diff = 0.0
+      if status.square:
+        z_scale = 5.0
+      elif history.all(lambda s: s.L2) or history.all(lambda s: s.R2):
+        z_scale = 2.0
+      else:
+        z_scale = 1.0
+      local_move = numpy.array((x_diff, y_diff,
+                                z_diff * z_scale, 
+                                1.0))
+    else:
+      local_move = numpy.array((0.0, 0.0, 0.0, 1.0))
+    q = numpy.array((pre_pose.pose.orientation.x,
+                     pre_pose.pose.orientation.y,
+                     pre_pose.pose.orientation.z,
+                     pre_pose.pose.orientation.w))
+    xyz_move = numpy.dot(tf.transformations.quaternion_matrix(q),
+                         local_move)
+    new_pose.pose.position.x = pre_pose.pose.position.x + xyz_move[0]
+    new_pose.pose.position.y = pre_pose.pose.position.y + xyz_move[1]
+    new_pose.pose.position.z = pre_pose.pose.position.z + xyz_move[2]
+    roll = 0.0
+    pitch = 0.0
+    yaw = 0.0
+    DTHETA = 0.02
+    if not status.R3:
+      if status.R1:
+        if status.left:
+          if status.square:
+            yaw = yaw + DTHETA * 5
+          elif history.all(lambda s: s.left):
+            yaw = yaw + DTHETA * 2
+          else:
+            yaw = yaw + DTHETA
+        elif status.right:
+          if status.square:
+            yaw = yaw - DTHETA * 5
+          elif history.all(lambda s: s.right):
+            yaw = yaw - DTHETA * 2
+          else:
+            yaw = yaw - DTHETA
+      else:
+        if status.right:
+          if status.square:
+            roll = roll + DTHETA * 5
+          elif history.all(lambda s: s.right):
+            roll = roll + DTHETA * 2
+          else:
+            roll = roll + DTHETA
+        elif status.left:
+          if status.square:
+            roll = roll - DTHETA * 5
+          elif history.all(lambda s: s.left):
+            roll = roll - DTHETA * 2
+          else:
+            roll = roll - DTHETA
+      if status.up:
+        if status.square:
+          pitch = pitch + DTHETA * 5
+        elif history.all(lambda s: s.up):
+          pitch = pitch + DTHETA * 2
+        else:
+          pitch = pitch + DTHETA
+      elif status.down:
+        if status.square:
+          pitch = pitch - DTHETA * 5
+        elif history.all(lambda s: s.down):
+          pitch = pitch - DTHETA * 2
+        else:
+          pitch = pitch - DTHETA
+    diff_q = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+    new_q = tf.transformations.quaternion_multiply(q, diff_q)
+    new_pose.pose.orientation.x = new_q[0]
+    new_pose.pose.orientation.y = new_q[1]
+    new_pose.pose.orientation.z = new_q[2]
+    new_pose.pose.orientation.w = new_q[3]
+
+    # process command keys
+    if not (status.R3 and status.R2 and status.L2):
+      if history.new(status, "circle") and not status.L1:
+        self.publish_pose_command(new_pose, self.circle_cmd)
+      if history.new(status, "triangle"):
+        self.publish_pose_command(new_pose, self.triangle_cmd)
+      if history.new(status, "cross"):
+        self.mode = self.MODE_MENU
+        self.publishMenu(self.selecting_index)
+        self.publishHelp()
+        self.switchMarker(self.selecting_index)
+        self.publishMarkers()
+
+    # publish at 30hz
+    if self.publish_pose:
+      now = rospy.Time.from_sec(time.time())
+      # placement.time_from_start = now - self.prev_time
+      if (now - self.prev_time).to_sec() > 1 / 30.0:
+        self.pose_pub.publish(new_pose)
+        if status.L1 and status.circle:
+          self.command_pub(self.press_cmd)
+        self.prev_time = now
+
+    self.pre_pose = new_pose
+
   def initMarker(self):
     self.pre_marker = copy.deepcopy(self.current_marker)
     marker = self.current_marker
@@ -521,15 +692,20 @@ show_label [Boolean, default: False]: display labels for marks or not
       rospy.logdebug("Creating new marker.")
       # create a new marker
       if len(self.markers.markers) == 0:
+        pose = PoseStamped()
+        pose.header.stamp = rospy.Time(0)
+        pose.header.frame_id = self.base_frame_id
+        pose.pose.orientation.w = 1.0
+        pre_pose = self.tf_listener.transformPose(self.frame_id, pose)
         marker = Marker()
         marker.header.frame_id = self.frame_id
         marker.type = self.type
         marker.ns = self.namespace
 
-        marker.pose.orientation.w = 1.0
-        marker.scale.x = 0.5
-        marker.scale.y = 0.5
-        marker.scale.z = 0.5
+        marker.pose = pre_pose.pose
+        marker.scale.x = 0.2
+        marker.scale.y = 0.2
+        marker.scale.z = 0.01
       else:
         # when the array is not empty, start from the last marker
         marker = copy.deepcopy(self.markers.markers[self.current_index-1])
@@ -537,11 +713,10 @@ show_label [Boolean, default: False]: display labels for marks or not
       marker.id = self.next_id
       self.setColor(marker, highlight=True)
       self.current_marker = marker
-      self.menu_list.insert(self.current_index, "Marker"+str(marker.id))
+      self.menu_list.insert(self.current_index, "Button"+str(marker.id))
       self.markers.markers.append(self.current_marker)
     self.pre_pose.pose = marker.pose
     rospy.logdebug("Editing marker "+str(marker.id))
-
 
   def setMarkerCB(self, box):
     marker = self.current_marker
@@ -622,7 +797,7 @@ Left Analog: Translate xy
 D-pad: Rotate pitch/roll
 R1 + Left/Right: Rotate yaw
 L1 + Up/Down: Change marker hight (z)
-L1 + Left/Right: Cchange marker y size
+L1 + Left/Right: Change marker y size
 L2/R2: Translate z
 Square(Hold): Move faster
 

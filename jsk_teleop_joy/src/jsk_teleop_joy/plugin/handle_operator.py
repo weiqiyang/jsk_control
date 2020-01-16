@@ -34,7 +34,7 @@ def signedSquare(val):
    sign = -1
  return val * val * sign
 
-class JoyMarkerArray(JSKJoyPlugin):
+class HandleOperator(JSKJoyPlugin):
   '''
 Usage:
 Check publishHelp() for controller configurations.
@@ -57,16 +57,17 @@ show_label [Boolean, default: False]: display labels for marks or not
   STATE_WAIT_FOR_JOY = 3
 
   MODE_MENU = 0
-  MODE_MARKER = 1
-  MODE_DELETE = 2
-  MODE_UNSAVED = 3
+  MODE_HANDLE = 1
+  MODE_MARKER = 2
+  MODE_AXIS = 3
+  MODE_OPERATE = 4
+  MODE_DELETE = 5
+  MODE_UNSAVED = 6
   mode = 0
 
   markers = MarkerArray()
-  menu_list = ['Add new ...']
+  menu_list = ['Set Handle', 'Set Door Surface', 'Set Door Axis', 'Operate']
   isClosed = True
-  next_id = 0
-
 
   def __init__(self, name, args):
     JSKJoyPlugin.__init__(self, name, args)
@@ -127,27 +128,9 @@ show_label [Boolean, default: False]: display labels for marks or not
     if self.mode == self.MODE_MENU:
       if status.triangle:
         # move/switch order
-        if history.new(status, "up") or history.new(status, "left_analog_up"):
-          if self.moveItemUp(self.markers.markers, self.selecting_index):
-            self.moveItemUp(self.menu_list, self.selecting_index)
-            self.selecting_index = self.selecting_index  - 1
-            self.publishMenu(self.selecting_index)
-            self.switchMarker(self.selecting_index)
-            self.showRoute()
-        elif history.new(status, "down") or history.new(status, "left_analog_down"):
-          if self.moveItemDown(self.markers.markers, self.selecting_index):
-            self.moveItemDown(self.menu_list, self.selecting_index)
-            self.selecting_index = self.selecting_index  + 1
-            self.publishMenu(self.selecting_index)
-            self.switchMarker(self.selecting_index)
-            self.showRoute()
-        elif history.new(status, "R1"):
+        if history.new(status, "R1"):
           #TODO preview ik
           rospy.logdebug("preview ik")
-        if not latest.triangle:
-          #TODO show marker route (lifetime 5s)
-          rospy.logdebug("show route")
-          self.showRoute()
       else:
         if history.new(status, "down") or history.new(status, "left_analog_down"):
           self.selecting_index = self.selecting_index + 1
@@ -164,8 +147,11 @@ show_label [Boolean, default: False]: display labels for marks or not
         elif history.new(status, "circle"):
           # close menu and edit
           self.publishMenu(self.selecting_index, close=True)
-          self.initMarker()
-          self.mode = self.MODE_MARKER
+          if self.selecting_index == 3:
+            self.mode = self.MODE_OPERATE
+          else:
+            self.initMarker()
+            self.mode = self.MODE_MARKER
         elif history.new(status, "square"):
           # delete current marker
           if not self.current_marker == None:
@@ -223,24 +209,35 @@ show_label [Boolean, default: False]: display labels for marks or not
         self.publishUnsavedMenu(self.confirm_index, close=True)
         self.mode = self.MODE_MARKER
         self.publishHelp()
+    elif self.mode == self.MODE_OPERATE:
+      if history.new(status, "cross"):
+        self.mode = self.MODE_MENU
+        self.publishMenu(self.current_index)
+      elif status.circle:
+        if status.left_analog_down:
+          self.command_pub.publish("PULLTEST+")
+        if status.left_analog_up:
+          self.command_pub.publish("PULLTEST-")
+
 
   def switchMarker(self, index):
     self.current_index = index
-    if self.current_index > len(self.markers.markers):
-      self.current_index = 0
-    elif self.current_index < 0:
-      self.current_index = len(self.markers.markers)
+    ns = ''
+    rospy.loginfo("current index: " + str(index))
+    if index == 0:
+      ns = 'handle'
+    elif index == 2:
+      ns = 'axis'
+    rospy.loginfo("current ns: " + ns)
 
     if not self.current_marker == None:
       self.setColor(self.current_marker, highlight=False)
-      #rospy.logdebug("Set marker " + str(self.current_marker.id) + " highlight off.")
-    if self.current_index == len(self.markers.markers):
-      #rospy.logdebug("Marker " + str(self.current_index) + " is None.")
-      self.current_marker = None
-    else:
-      self.current_marker = self.markers.markers[self.current_index]
-      #rospy.logdebug("Set marker " + str(self.current_marker.id) + " highlight on.")
-      self.setColor(self.current_marker, highlight=True)
+
+    self.current_marker = None
+    for m in self.markers.markers:
+      if m.ns == ns:
+        self.current_marker = m
+
     self.publishMarkers()
 
   def deleteMarker(self, index):
@@ -248,27 +245,6 @@ show_label [Boolean, default: False]: display labels for marks or not
     self.markers.markers[index].action = Marker.DELETE
     self.publishMarkers()
     self.markers.markers.remove(self.markers.markers[index])
-    self.menu_list.remove(self.menu_list[index])
-
-  def moveItemUp(self, li, index):
-    rospy.logdebug("move up index " + str(index))
-    if index > 0 and index < len(li):
-      temp = li[index]
-      li[index] = li[index-1]
-      li[index-1] = temp
-      return True
-    else:
-      return False
-
-  def moveItemDown(self, li, index):
-    rospy.logdebug("move down index " + str(index))
-    if index >= 0 and index < len(li)-1:
-      temp = li[index]
-      li[index] = li[index+1]
-      li[index+1] = temp
-      return True
-    else:
-      return False
 
   def showRoute(self):
     route = Marker()
@@ -415,7 +391,7 @@ show_label [Boolean, default: False]: display labels for marks or not
               m.type = self.type
           else:
             marker.scale.x *= 0.6
-
+          
         # keep minimun scale value
         if not marker.scale.x > 0:
           marker.scale.x = DSCALE
@@ -494,15 +470,11 @@ show_label [Boolean, default: False]: display labels for marks or not
     # process command keys
     if not (status.R3 and status.R2 and status.L2):
       if history.new(status, "select"):
-        command_pub.publish("SHARE_BBOX")
+        self.command_pub.publish("SHARE_BBOX")
       if history.new(status, "circle"):
         self.setColor(marker, highlight=False)
-        if marker.id == self.next_id:
-          # add current marker and goto the next
-          self.next_id += 1
-        self.current_index += 1
-        self.switchMarker(self.current_index)
-        self.initMarker()
+        self.mode = self.MODE_MENU
+        self.publishMenu(self.selecting_index)
       if history.new(status, "triangle"):
         #TODO preview
         rospy.logdebug("preview")
@@ -520,27 +492,26 @@ show_label [Boolean, default: False]: display labels for marks or not
     if marker == None:
       rospy.logdebug("Creating new marker.")
       # create a new marker
-      if len(self.markers.markers) == 0:
-        marker = Marker()
-        marker.header.frame_id = self.frame_id
-        marker.type = self.type
-        marker.ns = self.namespace
+      marker = Marker()
+      marker.header.frame_id = self.frame_id
+      marker.type = self.type
+      if self.current_index == 0:
+        marker.ns = 'handle'
+      elif self.current_index == 1:
+        marker.ns = 'surface'
+      elif self.current_index == 2:
+        marker.ns = 'axis'
 
-        marker.pose.orientation.w = 1.0
-        marker.scale.x = 0.5
-        marker.scale.y = 0.5
-        marker.scale.z = 0.5
-      else:
-        # when the array is not empty, start from the last marker
-        marker = copy.deepcopy(self.markers.markers[self.current_index-1])
-        rospy.logdebug("Copying marker " + str(self.current_index-1))
-      marker.id = self.next_id
+      marker.pose.orientation.w = 1.0
+      marker.scale.x = 0.1
+      marker.scale.y = 0.1
+      marker.scale.z = 0.6
+      marker.id = 0
       self.setColor(marker, highlight=True)
       self.current_marker = marker
-      self.menu_list.insert(self.current_index, "Marker"+str(marker.id))
       self.markers.markers.append(self.current_marker)
     self.pre_pose.pose = marker.pose
-    rospy.logdebug("Editing marker "+str(marker.id))
+    rospy.logdebug("Editing marker "+str(marker.ns))
 
 
   def setMarkerCB(self, box):
@@ -572,25 +543,6 @@ show_label [Boolean, default: False]: display labels for marks or not
     t = rospy.Time(0)
     for m in self.markers.markers:
       m.header.stamp = t
-    if self.show_label:
-      labels = copy.deepcopy(self.markers)
-      for m, txt in zip(labels.markers, self.menu_list):
-        # no label for route line
-        if m.type == 4:
-          break
-        # TEXT_VIEW_FACING=9
-        m.type = 9
-        m.ns = self.namespace + "_label"
-        m.text = txt
-        m.pose.position.z += m.scale.z
-        m.scale.x = 0.2
-        m.scale.y = 0.2
-        m.scale.z = 0.2
-        m.color.r = 1.0
-        m.color.g = 1.0
-        m.color.b = 1.0
-        m.color.a = 1.0
-      self.marker_array_pub.publish(labels)
     self.marker_array_pub.publish(self.markers)
 
   def publishHelp(self):

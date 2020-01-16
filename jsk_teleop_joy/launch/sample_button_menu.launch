@@ -2,8 +2,9 @@
   <arg name="CONTROLLER_TYPE" default="auto" />
   <arg name="DEV" default="/dev/input/js0" />
   <arg name="POSE_REMAP" default="joy_pose" />
-  <arg name="FRAME_ID" default="my_map" />
+  <arg name="FRAME_ID" default="map" />
 
+  <arg name="publish_js" default="false" />
   <arg name="gui" default="true" />
 
   <node pkg="joy" type="joy_node" name="joy_driver" output="screen" >
@@ -17,11 +18,11 @@
     <param name="controller_type" value="$(arg CONTROLLER_TYPE)" />
     <rosparam subst_value="true">
       plugins:
-        'MarkerArray':
-          class: 'JoyMarkerArray'
+        'Buttons':
+          class: 'ButtonMarkersMenu'
           args:
             menu: "overlay_menu"
-            type: 3
+            type: 1
             lock_xy: True
             publish_pose: True
             pose: $(arg POSE_REMAP)
@@ -31,14 +32,21 @@
             follow_view: true
             marker_pose: "marker_pose"
             show_label: True
-        'Handle':
-          class: 'HandleOperator'
-          args:
-            menu: "overlay_menu"
-            publish_pose: True
-            name: "joy_marker_array"
+            circle_cmd: "EXECUTE"
+            triangle_cmd: "PREVIEW"
     </rosparam>
   </node>
+
+  <group if="$(arg publish_js)">
+    <node name="pseudo_robot_state_publisher"
+          pkg="robot_state_publisher" type="robot_state_publisher" >
+      <remap from="joint_states" to="robot_js" />
+      <rosparam>
+        tf_prefix: "pseudo"
+        publish_frequency: 2.0
+      </rosparam>
+    </node>
+  </group>
 
   <group if="$(arg gui)">
     <node name="rviz"
