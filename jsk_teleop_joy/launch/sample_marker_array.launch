@@ -2,7 +2,7 @@
   <arg name="CONTROLLER_TYPE" default="auto" />
   <arg name="DEV" default="/dev/input/js0" />
   <arg name="POSE_REMAP" default="joy_pose" />
-  <arg name="FRAME_ID" default="my_map" />
+  <arg name="FRAME_ID" default="map" />
 
   <arg name="gui" default="true" />
 
