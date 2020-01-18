@@ -19,9 +19,10 @@ from diagnostic_msgs.msg import DiagnosticStatus, DiagnosticArray
 from jsk_recognition_msgs.msg import BoundingBox, BoundingBoxArray
 from jsk_rviz_plugins.msg import OverlayMenu, OverlayText
 from jsk_teleop_joy.joy_plugin import JSKJoyPlugin
+from jsk_teleop_joy.confirm_menu import YesNoMenu
 from joy_rviz_view_controller import RVizViewController
 
-def signedSquare(val):
+def signed_square(val):
     if val > 0:
         sign = 1
     else:
@@ -31,7 +32,7 @@ def signedSquare(val):
 class JoyMarkerArray(JSKJoyPlugin):
     '''
 Usage:
-Check publishHelp() for controller configurations.
+Check publish_help() for controller configurations.
 
 Args:
 publish_pose [Boolean, default: True]: publish pose or not
@@ -72,22 +73,22 @@ show_label [Boolean, default: False]: display labels for marks or not
         self.view_controller = RVizViewController(name, args)
         self.view_controller.pre_pose = self.pre_pose
         self.current_index = 0
-        self.confirm_index = 0
         self.selecting_index = 0
         self.title = self.getArg('title', 'MarkerList')
+        menu_topic = self.getArg('menu', 'dynamic_menu')
 
         self.pose_pub = rospy.Publisher(self.getArg('marker_pose', 'marker_pose'),
-                                                                            PoseStamped, queue_size=10)
-        self.menu_pub = rospy.Publisher(self.getArg('menu', 'dynamic_menu'),
-                                                                            OverlayMenu, queue_size=10)
+                                        PoseStamped, queue_size=10)
+        self.menu_pub = rospy.Publisher(menu_topic,
+                                        OverlayMenu, queue_size=10)
         self.marker_array_pub = rospy.Publisher(self.getArg('marker_array', 'marker_array'),
-                                                                            MarkerArray, queue_size=10)
+                                                MarkerArray, queue_size=10)
         self.command_pub = rospy.Publisher(self.getArg('command', 'command'),
-                                                                            String, queue_size=1)
+                                            String, queue_size=1)
         self.marker_sub = rospy.Subscriber(self.getArg('set_marker', 'set_marker'),
-                                                                            BoundingBox, self.setMarkerCB, queue_size=1)
+                                            BoundingBox, self.set_marker_cb, queue_size=1)
         self.help_pub = rospy.Publisher(self.getArg('help_text', 'help_text'),
-                                                                            OverlayText, queue_size=1)
+                                        OverlayText, queue_size=1)
 
         self.frame_id = self.getArg('frame_id', 'map')
         self.lock_xy = self.getArg('lock_xy', False)
@@ -95,13 +96,21 @@ show_label [Boolean, default: False]: display labels for marks or not
         self.namespace = self.getArg('namespace', 'joy_markers')
         self.show_label = self.getArg('show_label', False)
         self.bbox_topic = self.getArg('bbox_topic',
-                                                         "multi_euclidean_cluster_point_indices_decomposer/boxes")
+                                    "multi_euclidean_cluster_point_indices_decomposer/boxes")
         self.tf_listener = tf.TransformListener()
+
+        delete_cap = "Delete current marker? (This cannot be undone)"
+        self.delete_menu = YesNoMenu(menu_topic, delete_cap, self.delete_yes,
+                                     self.delete_no, reverse_option=True)
+        unsaved_cap = "Quit edit mode? (Unsaved markers will be aborted)"
+        self.unsaved_menu = YesNoMenu(menu_topic, unsaved_cap, self.unsaved_yes,
+                                     self.unsaved_no, reverse_option=True)
+
         #TODO self.loadMarkers()
         self.start()
 
     def start(self):
-        self.publishMenu(0, close=True) # close menu anyway
+        self.publish_menu(0, close=True) # close menu anyway
         if len(self.markers.markers) == 0:
             rospy.loginfo('The marker array is now empty')
             self.current_marker = None
@@ -109,7 +118,7 @@ show_label [Boolean, default: False]: display labels for marks or not
             self.current_marker = self.markers.markers[0]
         return True
 
-    def publishMenu(self, index, close=False):
+    def publish_menu(self, index, close=False):
         menu = OverlayMenu()
         menu.menus = self.menu_list
         menu.current_index = index
@@ -127,103 +136,83 @@ show_label [Boolean, default: False]: display labels for marks or not
             if status.triangle:
                 # move/switch order
                 if history.new(status, "up") or history.new(status, "left_analog_up"):
-                    if self.moveItemUp(self.markers.markers, self.selecting_index):
-                        self.moveItemUp(self.menu_list, self.selecting_index)
+                    if self.move_item_up(self.markers.markers, self.selecting_index):
+                        self.move_item_up(self.menu_list, self.selecting_index)
                         self.selecting_index = self.selecting_index - 1
-                        self.publishMenu(self.selecting_index)
-                        self.switchMarker(self.selecting_index)
-                        self.showRoute()
+                        self.publish_menu(self.selecting_index)
+                        self.switch_marker(self.selecting_index)
+                        self.show_route()
                 elif history.new(status, "down") or history.new(status, "left_analog_down"):
-                    if self.moveItemDown(self.markers.markers, self.selecting_index):
-                        self.moveItemDown(self.menu_list, self.selecting_index)
+                    if self.move_item_down(self.markers.markers, self.selecting_index):
+                        self.move_item_down(self.menu_list, self.selecting_index)
                         self.selecting_index = self.selecting_index + 1
-                        self.publishMenu(self.selecting_index)
-                        self.switchMarker(self.selecting_index)
-                        self.showRoute()
+                        self.publish_menu(self.selecting_index)
+                        self.switch_marker(self.selecting_index)
+                        self.show_route()
                 elif history.new(status, "R1"):
                     #TODO preview ik
                     rospy.logdebug("preview ik")
                 if not latest.triangle:
                     #TODO show marker route (lifetime 5s)
                     rospy.logdebug("show route")
-                    self.showRoute()
+                    self.show_route()
             else:
                 if history.new(status, "down") or history.new(status, "left_analog_down"):
                     self.selecting_index = self.selecting_index + 1
                     if self.selecting_index >= len(self.menu_list):
                         self.selecting_index = 0
-                    self.publishMenu(self.selecting_index)
-                    self.switchMarker(self.selecting_index)
+                    self.publish_menu(self.selecting_index)
+                    self.switch_marker(self.selecting_index)
                 elif history.new(status, "up") or history.new(status, "left_analog_up"):
                     self.selecting_index = self.selecting_index - 1
                     if self.selecting_index < 0:
                         self.selecting_index = len(self.menu_list) - 1
-                    self.publishMenu(self.selecting_index)
-                    self.switchMarker(self.selecting_index)
+                    self.publish_menu(self.selecting_index)
+                    self.switch_marker(self.selecting_index)
                 elif history.new(status, "circle"):
                     # close menu and edit
-                    self.publishMenu(self.selecting_index, close=True)
-                    self.initMarker()
+                    self.publish_menu(self.selecting_index, close=True)
+                    self.init_marker()
                     self.mode = self.MODE_MARKER
                 elif history.new(status, "square"):
                     # delete current marker
                     if not self.current_marker == None:
-                        self.publishMenu(self.selecting_index, close=True)
-                        self.confirm_index = 0
-                        self.publishDeleteMenu(self.confirm_index)
+                        self.publish_menu(self.selecting_index, close=True)
+                        self.delete_menu.publish_menu(0)
                         self.mode = self.MODE_DELETE
                 elif history.new(status, "start"):
                     #TODO execute?
                     rospy.logdebug("start pressed")
                 else:
-                    self.publishMenu(self.selecting_index)
-                self.publishHelp()
+                    self.publish_menu(self.selecting_index)
+                self.publish_help()
         elif self.mode == self.MODE_MARKER:
-            self.markerJoyCB(status, history)
+            self.marker_joy_cb(status, history)
         elif self.mode == self.MODE_DELETE:
-            if history.new(status, "down") or history.new(status, "left_analog_down") \
-                or history.new(status, "up") or history.new(status, "left_analog_up"):
-                self.confirm_index = 1 - self.confirm_index
-                self.publishDeleteMenu(self.confirm_index)
-            elif history.new(status, "circle") and self.confirm_index == 1:
-                self.publishDeleteMenu(self.confirm_index, close=True)
-                self.deleteMarker(self.current_index)
-                self.mode = self.MODE_MENU
-                self.publishHelp()
-                self.switchMarker(self.selecting_index)
-                self.publishMarkers()
-            elif history.new(status, "cross") \
-                or (history.new(status, "circle") and self.confirm_index == 0):
-                self.publishUnsavedMenu(self.confirm_index, close=True)
-                self.mode = self.MODE_MENU
-                self.publishHelp()
+            self.delete_menu.joy_cb(status, history)
         elif self.mode == self.MODE_UNSAVED:
-            if history.new(status, "down") or history.new(status, "left_analog_down") \
-                or history.new(status, "up") or history.new(status, "left_analog_up"):
-                self.confirm_index = 1 - self.confirm_index
-                self.publishUnsavedMenu(self.confirm_index)
-            elif history.new(status, "circle") and self.confirm_index == 1:
-                self.publishUnsavedMenu(self.confirm_index, close=True)
-                if self.pre_marker == None:
-                    self.deleteMarker(self.current_index)
-                    self.current_marker = None
-                    self.current_index -= 1
-                else:
-                    # restore pre_marker
-                    self.current_marker = self.pre_marker
-                    self.markers.markers[self.current_index] = self.current_marker
-                    self.setColor(self.current_marker, highlight=False)
-                self.mode = self.MODE_MENU
-                self.publishHelp()
-                self.switchMarker(self.selecting_index)
-                self.publishMarkers()
-            elif history.new(status, "cross") \
-                or (history.new(status, "circle") and self.confirm_index == 0):
-                self.publishUnsavedMenu(self.confirm_index, close=True)
-                self.mode = self.MODE_MARKER
-                self.publishHelp()
+            self.unsaved_menu.joy_cb(status, history)
 
-    def switchMarker(self, index):
+    def unsaved_yes(self):
+        if self.pre_marker == None:
+            self.delete_marker(self.current_index)
+            self.current_marker = None
+            self.current_index -= 1
+        else:
+            # restore pre_marker
+            self.current_marker = self.pre_marker
+            self.markers.markers[self.current_index] = self.current_marker
+            self.set_color(self.current_marker, highlight=False)
+        self.switch_marker(self.selecting_index)
+        self.publish_markers()
+        self.mode = self.MODE_MENU
+        self.publish_help()
+
+    def unsaved_no(self):
+        self.mode = self.MODE_MARKER
+        self.publish_help()
+
+    def switch_marker(self, index):
         self.current_index = index
         if self.current_index > len(self.markers.markers):
             self.current_index = 0
@@ -231,7 +220,7 @@ show_label [Boolean, default: False]: display labels for marks or not
             self.current_index = len(self.markers.markers)
 
         if not self.current_marker == None:
-            self.setColor(self.current_marker, highlight=False)
+            self.set_color(self.current_marker, highlight=False)
             #rospy.logdebug("Set marker " + str(self.current_marker.id) + " highlight off.")
         if self.current_index == len(self.markers.markers):
             #rospy.logdebug("Marker " + str(self.current_index) + " is None.")
@@ -239,17 +228,17 @@ show_label [Boolean, default: False]: display labels for marks or not
         else:
             self.current_marker = self.markers.markers[self.current_index]
             #rospy.logdebug("Set marker " + str(self.current_marker.id) + " highlight on.")
-            self.setColor(self.current_marker, highlight=True)
-        self.publishMarkers()
+            self.set_color(self.current_marker, highlight=True)
+        self.publish_markers()
 
-    def deleteMarker(self, index):
+    def delete_marker(self, index):
         rospy.loginfo("delete marker " + str(self.current_index))
         self.markers.markers[index].action = Marker.DELETE
-        self.publishMarkers()
+        self.publish_markers()
         self.markers.markers.remove(self.markers.markers[index])
         self.menu_list.remove(self.menu_list[index])
 
-    def moveItemUp(self, li, index):
+    def move_item_up(self, li, index):
         rospy.logdebug("move up index " + str(index))
         if index > 0 and index < len(li):
             temp = li[index]
@@ -259,7 +248,7 @@ show_label [Boolean, default: False]: display labels for marks or not
         else:
             return False
 
-    def moveItemDown(self, li, index):
+    def move_item_down(self, li, index):
         rospy.logdebug("move down index " + str(index))
         if index >= 0 and index < len(li)-1:
             temp = li[index]
@@ -269,7 +258,7 @@ show_label [Boolean, default: False]: display labels for marks or not
         else:
             return False
 
-    def showRoute(self):
+    def show_route(self):
         route = Marker()
         route.header.frame_id = self.frame_id
         route.lifetime.secs = 5
@@ -279,12 +268,12 @@ show_label [Boolean, default: False]: display labels for marks or not
         route.scale.x = 0.01
         for m in self.markers.markers:
             route.points.append(m.pose.position)
-        self.setColor(route, highlight=True)
+        self.set_color(route, highlight=True)
         self.markers.markers.append(route)
-        self.publishMarkers()
+        self.publish_markers()
         self.markers.markers.pop()
 
-    def setColor(self, marker, highlight=False):
+    def set_color(self, marker, highlight=False):
         if highlight:
             marker.color.r = 0.0
             marker.color.g = 1.0
@@ -294,29 +283,18 @@ show_label [Boolean, default: False]: display labels for marks or not
         marker.color.b = 0.0
         marker.color.a = 1.0
 
-    def publishDeleteMenu(self, index, close=False):
-        menu = OverlayMenu()
-        menu.menus = ["No", "Yes"]
-        menu.current_index = index
-        menu.title = "Delete current marker? (Cannot undo)"
-        self.isClosed = False
-        if close:
-            menu.action = OverlayMenu.ACTION_CLOSE
-            self.isClosed = True
-        self.menu_pub.publish(menu)
+    def delete_yes(self):
+        self.delete_marker(self.current_index)
+        self.switch_marker(self.selecting_index)
+        self.publish_markers()
+        self.mode = self.MODE_MENU
+        self.publish_help()
 
-    def publishUnsavedMenu(self, index, close=False):
-        menu = OverlayMenu()
-        menu.menus = ["No", "Yes"]
-        menu.current_index = index
-        menu.title = "Quit edit mode? (Unsaved markers will be aborted)"
-        self.isClosed = False
-        if close:
-            menu.action = OverlayMenu.ACTION_CLOSE
-            self.isClosed = True
-        self.menu_pub.publish(menu)
+    def delete_no(self):
+        self.mode = self.MODE_MENU
+        self.publish_help()
 
-    def markerJoyCB(self, status, history):
+    def marker_joy_cb(self, status, history):
         pre_pose = self.pre_pose
         marker = self.current_marker
         if history.length() > 0:
@@ -339,8 +317,8 @@ show_label [Boolean, default: False]: display labels for marks or not
                     scale = 50.0
                 else:
                     scale = 80.0
-            x_diff = signedSquare(status.left_analog_y) / scale
-            y_diff = signedSquare(status.left_analog_x) / scale
+            x_diff = signed_square(status.left_analog_y) / scale
+            y_diff = signed_square(status.left_analog_x) / scale
             # z
             if status.L2:
                 z_diff = 0.005
@@ -354,9 +332,7 @@ show_label [Boolean, default: False]: display labels for marks or not
                 z_scale = 2.0
             else:
                 z_scale = 1.0
-            local_move = numpy.array((x_diff, y_diff,
-                                                                z_diff * z_scale, 
-                                                                1.0))
+            local_move = numpy.array((x_diff, y_diff, z_diff * z_scale, 1.0))
         else:
             local_move = numpy.array((0.0, 0.0, 0.0, 1.0))
         q = numpy.array((pre_pose.pose.orientation.x,
@@ -483,7 +459,7 @@ show_label [Boolean, default: False]: display labels for marks or not
         now = rospy.Time.from_sec(time.time())
         # placement.time_from_start = now - self.prev_time
         if (now - self.prev_time).to_sec() > 1 / 10.0:
-            self.publishMarkers()
+            self.publish_markers()
             if self.publish_pose:
                 self.pose_pub.publish(new_pose)
             self.prev_time = now
@@ -495,50 +471,49 @@ show_label [Boolean, default: False]: display labels for marks or not
             if history.new(status, "select"):
                 #command_pub.publish("SHARE_BBOX")
                 try:
-                    self.setColor(marker, highlight=False)
+                    self.set_color(marker, highlight=False)
                     rospy.loginfo("Subscribing bounding boxes...")
                     boxes = rospy.wait_for_message(self.bbox_topic,
-                                        BoundingBoxArray, timeout=10)
+                                                    BoundingBoxArray, timeout=10)
                     rospy.loginfo("Adding " + str(len(boxes.boxes)) + " boxes to marker array...")
                     local_id = 0
                     if marker.id == self.next_id:
                         # abort current marker
-                        self.deleteMarker(self.current_index)
+                        self.delete_marker(self.current_index)
                         self.current_index -= 1
                     for box in boxes.boxes:
                         self.current_index = len(self.markers.markers)
                         self.current_marker = None
-                        self.initMarker()
+                        self.init_marker()
                         marker = self.current_marker
                         marker.id = self.next_id# + local_id
                         #local_id += 1
                         self.next_id += 1
-                        self.setMarkerByBox(marker, box)
+                        self.set_marker_by_box(marker, box)
                         self.pending_markers.append(self.current_marker)
                     # self.next_id += local_id
-                    self.publishMarkers()
+                    self.publish_markers()
                     #TODO Confirm adding
                     self.mode = self.MODE_MENU
                 except rospy.exceptions.ROSException:
                     rospy.logwarn("Time out. Failed to get bounding boxes from " + self.bbox_topic)
             if history.new(status, "circle"):
-                self.setColor(marker, highlight=False)
+                self.set_color(marker, highlight=False)
                 self.next_id += 1
                 self.current_index += 1
-                self.switchMarker(self.current_index)
-                self.initMarker()
+                self.switch_marker(self.current_index)
+                self.init_marker()
             if history.new(status, "triangle"):
                 #TODO preview
                 rospy.logdebug("preview")
             if history.new(status, "cross"):
                 # confirm and back to menu
                 rospy.loginfo("Need confirm before quit.")
-                self.confirm_index = 0
-                self.publishUnsavedMenu(self.confirm_index)
+                self.unsaved_menu.publish_menu(0)
                 self.mode = self.MODE_UNSAVED
-                self.publishHelp()
+                self.publish_help()
 
-    def initMarker(self):
+    def init_marker(self):
         self.pre_marker = copy.deepcopy(self.current_marker)
         marker = self.current_marker
         if marker == None:
@@ -559,26 +534,25 @@ show_label [Boolean, default: False]: display labels for marks or not
                 marker = copy.deepcopy(self.markers.markers[self.current_index-1])
                 rospy.logdebug("Copying marker " + str(self.current_index-1))
             marker.id = self.next_id
-            self.setColor(marker, highlight=True)
+            self.set_color(marker, highlight=True)
             self.current_marker = marker
             self.menu_list.insert(self.current_index, "Marker"+str(marker.id))
             self.markers.markers.append(self.current_marker)
         self.pre_pose.pose = marker.pose
         rospy.logdebug("Editing marker "+str(marker.id))
 
-
-    def setMarkerCB(self, box):
+    def set_marker_cb(self, box):
         marker = self.current_marker
         if marker == None:
             ros.logwarn("Trying to set marker of null value")
             return
-        self.setMarkerByBox(marker, box)
+        self.set_marker_by_box(marker, box)
         self.markers_pub.publish(self.markers)
         if self.publish_pose:
             pose.header.stamp = rospy.Time(0)
             self.pose_pub.publish(self.pre_pose)
 
-    def setMarkerByBox(self, marker, box):
+    def set_marker_by_box(self, marker, box):
         pose = PoseStamped()
         pose.header.frame_id = box.header.frame_id
         pose.pose = box.pose
@@ -595,10 +569,10 @@ show_label [Boolean, default: False]: display labels for marks or not
             else:
                 diff_q = tf.transformations.quaternion_from_euler(0.0, math.pi/2, 0.0)
                 marker.scale.x = marker.scale.y
-            marker.pose = self.translatePose(marker.pose, local_diff, diff_q)
+            marker.pose = self.translate_pose(marker.pose, local_diff, diff_q)
             self.pre_pose.pose = marker.pose
 
-    def translatePose(self, pre_pose, dist, diff_q):
+    def translate_pose(self, pre_pose, dist, diff_q):
         pose = copy.deepcopy(pre_pose)
         q = numpy.array((pose.orientation.x,
                          pose.orientation.y,
@@ -615,7 +589,7 @@ show_label [Boolean, default: False]: display labels for marks or not
         pose.position.z += xyz_move[2]
         return pose
 
-    def publishMarkers(self):
+    def publish_markers(self):
         t = rospy.Time(0)
         for m in self.markers.markers:
             m.header.stamp = t
@@ -640,7 +614,7 @@ show_label [Boolean, default: False]: display labels for marks or not
             self.marker_array_pub.publish(labels)
         self.marker_array_pub.publish(self.markers)
 
-    def publishHelp(self):
+    def publish_help(self):
         text = OverlayText()
         text.width = 400
         #text.height = 600
@@ -696,12 +670,12 @@ Cross: Quit (without saving)
         #self.start()
         # TODO save the previous pose?
         #self.selecting_index = 0
-        #self.switchMarker(0)
-        #self.publishMenu(self.selecting_index, close=False)
+        #self.switch_marker(0)
+        #self.publish_menu(self.selecting_index, close=False)
 
     def disable(self):
         rospy.logdebug("Disabled")
-        #self.publishMenu(self.selecting_index, close=True)
+        #self.publish_menu(self.selecting_index, close=True)
         # TODO Back to main menu
 
 def main():
