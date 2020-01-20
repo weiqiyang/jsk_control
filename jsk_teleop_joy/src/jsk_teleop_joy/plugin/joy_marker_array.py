@@ -100,11 +100,9 @@ show_label [Boolean, default: False]: display labels for marks or not
         self.tf_listener = tf.TransformListener()
 
         delete_cap = "Delete current marker? (This cannot be undone)"
-        self.delete_menu = YesNoMenu(menu_topic, delete_cap, self.delete_yes,
-                                     self.delete_no, reverse_option=True)
+        self.delete_menu = YesNoMenu(menu_topic, delete_cap, self.delete_yes, self.delete_no)
         unsaved_cap = "Quit edit mode? (Unsaved markers will be aborted)"
-        self.unsaved_menu = YesNoMenu(menu_topic, unsaved_cap, self.unsaved_yes,
-                                     self.unsaved_no, reverse_option=True)
+        self.unsaved_menu = YesNoMenu(menu_topic, unsaved_cap, self.unsaved_yes, self.unsaved_no)
         load_cap = "Do you want to save the loaded markers?"
         self.load_menu = YesNoMenu(menu_topic, load_cap, self.load_yes, self.load_no)
 
@@ -180,7 +178,7 @@ show_label [Boolean, default: False]: display labels for marks or not
                     # delete current marker
                     if not self.current_marker == None:
                         self.publish_menu(self.selecting_index, close=True)
-                        self.delete_menu.publish_menu(0)
+                        self.delete_menu.publish_menu(1)
                         self.mode = self.MODE_DELETE
                 elif history.new(status, "start"):
                     #TODO execute?
@@ -525,7 +523,7 @@ show_label [Boolean, default: False]: display labels for marks or not
             if history.new(status, "cross"):
                 # confirm and back to menu
                 rospy.loginfo("Need confirm before quit.")
-                self.unsaved_menu.publish_menu(0)
+                self.unsaved_menu.publish_menu(1)
                 self.mode = self.MODE_UNSAVED
                 self.publish_help()
 
