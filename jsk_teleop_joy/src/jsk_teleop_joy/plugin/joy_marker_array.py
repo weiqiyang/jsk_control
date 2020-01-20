@@ -55,6 +55,8 @@ show_label [Boolean, default: False]: display labels for marks or not
     MODE_MARKER = 1
     MODE_DELETE = 2
     MODE_UNSAVED = 3
+    MODE_LOAD = 4
+    MODE_MANIP = 5
     mode = 0
 
     markers = MarkerArray()
@@ -98,6 +100,7 @@ show_label [Boolean, default: False]: display labels for marks or not
         self.bbox_topic = self.getArg('bbox_topic',
                                     "multi_euclidean_cluster_point_indices_decomposer/boxes")
         self.tf_listener = tf.TransformListener()
+        self.manip_pose = None
 
         delete_cap = "Delete current marker? (This cannot be undone)"
         self.delete_menu = YesNoMenu(menu_topic, delete_cap, self.delete_yes, self.delete_no)
@@ -194,6 +197,8 @@ show_label [Boolean, default: False]: display labels for marks or not
             self.unsaved_menu.joy_cb(status, history)
         elif self.mode == self.MODE_LOAD:
             self.load_menu.joy_cb(status, history)
+        elif self.mode == self.MODE_MANIP:
+            self.manip_joy_cb(status, history)
 
     def unsaved_yes(self):
         if self.pre_marker == None:
@@ -307,9 +312,8 @@ show_label [Boolean, default: False]: display labels for marks or not
         self.mode = self.MODE_MENU
         self.publish_help()
 
-    def marker_joy_cb(self, status, history):
+    def pose_joy_cb(self, status, history):
         pre_pose = self.pre_pose
-        marker = self.current_marker
         if history.length() > 0:
             latest = history.latest()
             if status.R3 and status.L2 and status.R2 and not (latest.R3 and latest.L2 and latest.R2):
@@ -348,75 +352,24 @@ show_label [Boolean, default: False]: display labels for marks or not
             local_move = numpy.array((x_diff, y_diff, z_diff * z_scale, 1.0))
         else:
             local_move = numpy.array((0.0, 0.0, 0.0, 1.0))
+
         q = numpy.array((pre_pose.pose.orientation.x,
-                                         pre_pose.pose.orientation.y,
-                                         pre_pose.pose.orientation.z,
-                                         pre_pose.pose.orientation.w))
+                         pre_pose.pose.orientation.y,
+                         pre_pose.pose.orientation.z,
+                         pre_pose.pose.orientation.w))
         xyz_move = numpy.dot(tf.transformations.quaternion_matrix(q),
-                                                 local_move)
+                             local_move)
         new_pose.pose.position.x = pre_pose.pose.position.x + xyz_move[0]
         new_pose.pose.position.y = pre_pose.pose.position.y + xyz_move[1]
         new_pose.pose.position.z = pre_pose.pose.position.z + xyz_move[2]
+
+        # rotate
         roll = 0.0
         pitch = 0.0
         yaw = 0.0
         DTHETA = 0.02
-        DSCALE = 0.002
-        if not status.R3:
-            # scale
-            if status.L1:
-                # scale xy
-                if status.square:
-                    xscale_diff = status.left_analog_y * DSCALE * 15
-                    yscale_diff = status.left_analog_x * DSCALE * 15
-                else:
-                    xscale_diff = status.left_analog_y * DSCALE * 5
-                    yscale_diff = status.left_analog_x * DSCALE * 5
-                marker.scale.x = marker.scale.x + xscale_diff
-                if self.lock_xy:
-                    marker.scale.y = marker.scale.x
-                marker.scale.y = marker.scale.y + yscale_diff
-                if self.lock_xy:
-                    marker.scale.x = marker.scale.y
-                # scale z
-                if status.up:
-                    if status.square:
-                        marker.scale.z = marker.scale.z + DSCALE * 5
-                    elif history.all(lambda s: s.up):
-                        marker.scale.z = marker.scale.z + DSCALE * 2
-                    else:
-                        marker.scale.z = marker.scale.z + DSCALE
-                elif status.down:
-                    if status.square:
-                        marker.scale.z = marker.scale.z - DSCALE * 5
-                    elif history.all(lambda s: s.down):
-                        marker.scale.z = marker.scale.z - DSCALE * 2
-                    else:
-                        marker.scale.z = marker.scale.z - DSCALE
-                if history.new(status, "R1"):
-                    self.lock_xy = not self.lock_xy
-                    if self.lock_xy:
-                        marker.scale.x = marker.scale.y
-                        # torque between cube (type=1) and cylinder (type=3)
-                        self.type = 4 - self.type
-                        for m in self.markers.markers:
-                            m.type = self.type
-                    else:
-                        marker.scale.x *= 0.6
-
-                # keep minimun scale value
-                if not marker.scale.x > 0:
-                    marker.scale.x = DSCALE
-                if not marker.scale.y > 0:
-                    marker.scale.y = DSCALE
-                if not marker.scale.z > 0:
-                    marker.scale.z = DSCALE
-
-                ## uniform all markers' size
-                #for m in self.markers.markers:
-                #    m.scale = marker.scale
-            # rotate
-            elif status.R1:
+        if not status.R3 and not status.L1:
+            if status.R1:
                 if status.left:
                     if status.square:
                         yaw = yaw + DTHETA * 5
@@ -466,7 +419,65 @@ show_label [Boolean, default: False]: display labels for marks or not
         new_pose.pose.orientation.y = new_q[1]
         new_pose.pose.orientation.z = new_q[2]
         new_pose.pose.orientation.w = new_q[3]
-        marker.pose = new_pose.pose
+
+        self.pre_pose = new_pose
+
+    def marker_joy_cb(self, status, history):
+        marker = self.current_marker
+        self.pose_joy_cb(status, history)
+        marker.pose = self.pre_pose.pose
+        # scale
+        DSCALE = 0.002
+        if not status.R3 and status.L1:
+            # scale xy
+            if status.square:
+                xscale_diff = status.left_analog_y * DSCALE * 15
+                yscale_diff = status.left_analog_x * DSCALE * 15
+            else:
+                xscale_diff = status.left_analog_y * DSCALE * 5
+                yscale_diff = status.left_analog_x * DSCALE * 5
+            marker.scale.x = marker.scale.x + xscale_diff
+            if self.lock_xy:
+                marker.scale.y = marker.scale.x
+            marker.scale.y = marker.scale.y + yscale_diff
+            if self.lock_xy:
+                marker.scale.x = marker.scale.y
+            # scale z
+            if status.up:
+                if status.square:
+                    marker.scale.z = marker.scale.z + DSCALE * 5
+                elif history.all(lambda s: s.up):
+                    marker.scale.z = marker.scale.z + DSCALE * 2
+                else:
+                    marker.scale.z = marker.scale.z + DSCALE
+            elif status.down:
+                if status.square:
+                    marker.scale.z = marker.scale.z - DSCALE * 5
+                elif history.all(lambda s: s.down):
+                    marker.scale.z = marker.scale.z - DSCALE * 2
+                else:
+                    marker.scale.z = marker.scale.z - DSCALE
+            if history.new(status, "R1"):
+                self.lock_xy = not self.lock_xy
+                if self.lock_xy:
+                    marker.scale.x = marker.scale.y
+                    # torque between cube (type=1) and cylinder (type=3)
+                    self.type = 4 - self.type
+                    for m in self.markers.markers:
+                        m.type = self.type
+                else:
+                    marker.scale.x *= 0.6
+            # keep minimun scale value
+            if not marker.scale.x > 0:
+                marker.scale.x = DSCALE
+            if not marker.scale.y > 0:
+                marker.scale.y = DSCALE
+            if not marker.scale.z > 0:
+                marker.scale.z = DSCALE
+
+            ## uniform all markers' size
+            #for m in self.markers.markers:
+            #    m.scale = marker.scale
 
         # publish marker(s) at 10hz
         now = rospy.Time.from_sec(time.time())
@@ -474,10 +485,8 @@ show_label [Boolean, default: False]: display labels for marks or not
         if (now - self.prev_time).to_sec() > 1 / 10.0:
             self.publish_markers()
             if self.publish_pose:
-                self.pose_pub.publish(new_pose)
+                self.pose_pub.publish(self.pre_pose)
             self.prev_time = now
-
-        self.pre_pose = new_pose
 
         # process command keys
         if not (status.R3 and status.R2 and status.L2):
@@ -519,7 +528,11 @@ show_label [Boolean, default: False]: display labels for marks or not
                 self.init_marker()
             if history.new(status, "triangle"):
                 #TODO preview
-                rospy.logdebug("preview")
+                if self.current_marker.id == self.next_id:
+                    rospy.logwarn("Please save marker before manipulation.")
+                else:
+                    self.init_manip_pose(self.current_marker)
+                    self.mode = self.MODE_MANIP
             if history.new(status, "cross"):
                 # confirm and back to menu
                 rospy.loginfo("Need confirm before quit.")
@@ -554,6 +567,43 @@ show_label [Boolean, default: False]: display labels for marks or not
             self.markers.markers.append(self.current_marker)
         self.pre_pose.pose = marker.pose
         rospy.logdebug("Editing marker "+str(marker.id))
+
+    def init_manip_pose(self, marker):
+        if self.manip_pose == None:
+            self.manip_pose = PoseStamped()
+            self.manip_pose.header = copy.deepcopy(marker.header)
+            self.manip_pose.pose = copy.deepcopy(marker.pose)
+        else:
+            #TODO
+            return
+
+    def manip_joy_cb(self, status, history):
+        self.pre_pose = self.manip_pose
+        self.pose_joy_cb(status, history)
+        self.manip_pose = copy.deepcopy(self.pre_pose)
+
+        # process command keys
+        if not (status.R3 and status.R2 and status.L2):
+            if history.new(status, "circle") and not status.L1:
+                self.command_pub.publish("CIRCLE_TEST")
+            if history.new(status, "triangle"):
+                self.command_pub.publish("TRIANGLE_TEST")
+            if history.new(status, "cross"):
+                self.mode = self.MODE_MENU
+                self.publishMenu(self.selecting_index)
+                self.publishHelp()
+                self.switchMarker(self.selecting_index)
+                self.publishMarkers()
+
+        # publish at 30hz
+        if self.publish_pose:
+            now = rospy.Time.from_sec(time.time())
+            # placement.time_from_start = now - self.prev_time
+            if (now - self.prev_time).to_sec() > 1 / 30.0:
+                self.pose_pub.publish(self.pre_pose)
+                if status.L1 and status.circle:
+                    self.command_pub(self.press_cmd)
+                self.prev_time = now
 
     def set_marker_cb(self, box):
         marker = self.current_marker
