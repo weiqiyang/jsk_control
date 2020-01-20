@@ -80,7 +80,9 @@ show_label [Boolean, default: False]: display labels for marks or not
         menu_topic = self.getArg('menu', 'dynamic_menu')
 
         self.pose_pub = rospy.Publisher(self.getArg('marker_pose', 'marker_pose'),
-                                        PoseStamped, queue_size=10)
+                                        PoseStamped, queue_size=1)
+        self.target_pub = rospy.Publisher(self.getArg('target_pose', 'target_pose'),
+                                        PoseStamped, queue_size=1)
         self.menu_pub = rospy.Publisher(menu_topic,
                                         OverlayMenu, queue_size=10)
         self.marker_array_pub = rospy.Publisher(self.getArg('marker_array', 'marker_array'),
@@ -584,16 +586,38 @@ show_label [Boolean, default: False]: display labels for marks or not
 
         # process command keys
         if not (status.R3 and status.R2 and status.L2):
-            if history.new(status, "circle") and not status.L1:
-                self.command_pub.publish("CIRCLE_TEST")
-            if history.new(status, "triangle"):
-                self.command_pub.publish("TRIANGLE_TEST")
-            if history.new(status, "cross"):
-                self.mode = self.MODE_MENU
-                self.publishMenu(self.selecting_index)
-                self.publishHelp()
-                self.switchMarker(self.selecting_index)
-                self.publishMarkers()
+            if status.L1:
+                # assoc mode
+                if history.new(status, "up") or history.new(status, "left"):
+                    self.selecting_index = self.selecting_index - 1
+                    if self.selecting_index < 0:
+                        self.selecting_index = len(self.markers.markers) - 1
+                    self.switch_marker(self.selecting_index)
+                elif history.new(status, "down") or history.new(status, "right"):
+                    self.selecting_index = self.selecting_index + 1
+                    if self.selecting_index >= len(self.markers.markers):
+                        self.selecting_index = 0
+                    self.switch_marker(self.selecting_index)
+                if history.new(status, "circle"):
+                    self.publish_marker_command(self.current_marker, "ASSOC_EXECUTE")
+                if history.new(status, "triangle"):
+                    self.publish_marker_command(self.current_marker, "ASSOC_PREVIEW")
+                if history.new(status, "square"):
+                    # Reset manip pose
+                    self.manip_pose = None
+                    self.init_manip_pose(self.current_marker)
+
+            else:
+                if history.new(status, "circle"):
+                    self.publish_marker_command(self.current_marker, "ASSOC")
+                if history.new(status, "triangle"):
+                    self.publish_pose_command(self.manip_pose, "PREVIEW")
+                if history.new(status, "cross"):
+                    self.mode = self.MODE_MENU
+                    self.publish_menu(self.selecting_index)
+                    self.publish_help()
+                    self.switch_marker(self.selecting_index)
+                    self.publish_markers()
 
         # publish at 30hz
         if self.publish_pose:
@@ -601,9 +625,18 @@ show_label [Boolean, default: False]: display labels for marks or not
             # placement.time_from_start = now - self.prev_time
             if (now - self.prev_time).to_sec() > 1 / 30.0:
                 self.pose_pub.publish(self.pre_pose)
-                if status.L1 and status.circle:
-                    self.command_pub(self.press_cmd)
                 self.prev_time = now
+
+
+    def publish_pose_command(self, pose, command):
+        self.target_pub.publish(pose)
+        self.command_pub.publish(command)
+
+    def publish_marker_command(self, marker, command):
+        pose = PoseStamped()
+        pose.pose = marker.pose
+        pose.header = marker.header
+        self.publish_pose_command(pose, command)
 
     def set_marker_cb(self, box):
         marker = self.current_marker
