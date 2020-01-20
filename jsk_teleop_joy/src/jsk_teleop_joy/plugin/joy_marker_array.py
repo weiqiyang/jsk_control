@@ -105,6 +105,8 @@ show_label [Boolean, default: False]: display labels for marks or not
         unsaved_cap = "Quit edit mode? (Unsaved markers will be aborted)"
         self.unsaved_menu = YesNoMenu(menu_topic, unsaved_cap, self.unsaved_yes,
                                      self.unsaved_no, reverse_option=True)
+        load_cap = "Do you want to save the loaded markers?"
+        self.load_menu = YesNoMenu(menu_topic, load_cap, self.load_yes, self.load_no)
 
         #TODO self.loadMarkers()
         self.start()
@@ -153,7 +155,7 @@ show_label [Boolean, default: False]: display labels for marks or not
                     #TODO preview ik
                     rospy.logdebug("preview ik")
                 if not latest.triangle:
-                    #TODO show marker route (lifetime 5s)
+                    # Show marker route (lifetime 5s)
                     rospy.logdebug("show route")
                     self.show_route()
             else:
@@ -192,6 +194,8 @@ show_label [Boolean, default: False]: display labels for marks or not
             self.delete_menu.joy_cb(status, history)
         elif self.mode == self.MODE_UNSAVED:
             self.unsaved_menu.joy_cb(status, history)
+        elif self.mode == self.MODE_LOAD:
+            self.load_menu.joy_cb(status, history)
 
     def unsaved_yes(self):
         if self.pre_marker == None:
@@ -211,6 +215,17 @@ show_label [Boolean, default: False]: display labels for marks or not
     def unsaved_no(self):
         self.mode = self.MODE_MARKER
         self.publish_help()
+
+    def load_yes(self):
+        self.mode = self.MODE_MENU
+        self.publish_help()
+        self.publish_menu(self.current_index)
+
+    def load_no(self):
+        # TODO delete loaded markers
+        self.mode = self.MODE_MENU
+        self.publish_help()
+        self.publish_menu(self.current_index)
 
     def switch_marker(self, index):
         self.current_index = index
@@ -494,7 +509,8 @@ show_label [Boolean, default: False]: display labels for marks or not
                     # self.next_id += local_id
                     self.publish_markers()
                     #TODO Confirm adding
-                    self.mode = self.MODE_MENU
+                    self.load_menu.publish_menu(0)
+                    self.mode = self.MODE_LOAD
                 except rospy.exceptions.ROSException:
                     rospy.logwarn("Time out. Failed to get bounding boxes from " + self.bbox_topic)
             if history.new(status, "circle"):
