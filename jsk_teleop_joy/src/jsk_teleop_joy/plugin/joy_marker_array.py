@@ -555,9 +555,9 @@ show_label [Boolean, default: False]: display labels for marks or not
                 marker.ns = self.namespace
 
                 marker.pose.orientation.w = 1.0
-                marker.scale.x = 0.5
-                marker.scale.y = 0.5
-                marker.scale.z = 0.5
+                marker.scale.x = 0.05
+                marker.scale.y = 0.05
+                marker.scale.z = 0.1
             else:
                 # when the array is not empty, start from the last marker
                 marker = copy.deepcopy(self.markers.markers[self.current_index-1])
@@ -598,20 +598,24 @@ show_label [Boolean, default: False]: display labels for marks or not
                     if self.selecting_index >= len(self.markers.markers):
                         self.selecting_index = 0
                     self.switch_marker(self.selecting_index)
-                if history.new(status, "circle"):
-                    self.publish_marker_command(self.current_marker, "ASSOC_EXECUTE")
                 if history.new(status, "triangle"):
                     self.publish_marker_command(self.current_marker, "ASSOC_PREVIEW")
                 if history.new(status, "square"):
                     # Reset manip pose
                     self.manip_pose = None
                     self.init_manip_pose(self.current_marker)
+                if history.new(status, "start"):
+                    self.publish_marker_command(self.current_marker, "ASSOC_EXECUTE")
 
             else:
-                if history.new(status, "circle"):
-                    self.publish_marker_command(self.current_marker, "ASSOC")
                 if history.new(status, "triangle"):
                     self.publish_pose_command(self.manip_pose, "PREVIEW")
+                elif history.new(status, "circle"):
+                    self.publish_marker_command(self.current_marker, "ASSOC")
+                elif history.new(status, "start"):
+                    self.publish_marker_command(self.current_marker, "EXECUTE")
+                elif history.new(status, "select"):
+                    self.publish_marker_command(self.current_marker, "RESET_MANIP")
                 if history.new(status, "cross"):
                     self.mode = self.MODE_MENU
                     self.publish_menu(self.selecting_index)
