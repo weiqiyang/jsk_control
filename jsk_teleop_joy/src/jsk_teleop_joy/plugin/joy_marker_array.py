@@ -59,6 +59,8 @@ show_label [Boolean, default: False]: display labels for marks or not
     MODE_MANIP = 5
     mode = 0
 
+    assoc_flag = false
+
     markers = MarkerArray()
     pending_markers = []
     menu_list = ['Add new ...']
@@ -599,7 +601,10 @@ show_label [Boolean, default: False]: display labels for marks or not
                         self.selecting_index = 0
                     self.switch_marker(self.selecting_index)
                 if history.new(status, "triangle"):
-                    self.publish_marker_command(self.current_marker, "ASSOC_PREVIEW")
+                    if assoc_flag:
+                        self.publish_marker_command(self.current_marker, "ASSOC_PREVIEW")
+                    else:
+                        rospy.logwarn("Please assoc current pose after initial preview.")
                 if history.new(status, "square"):
                     # Reset manip pose
                     self.manip_pose = None
@@ -609,8 +614,10 @@ show_label [Boolean, default: False]: display labels for marks or not
 
             else:
                 if history.new(status, "triangle"):
+                    self.assoc_flag = False
                     self.publish_pose_command(self.manip_pose, "PREVIEW")
                 elif history.new(status, "circle"):
+                    self.assoc_flag = True
                     self.publish_marker_command(self.current_marker, "ASSOC")
                 elif history.new(status, "start"):
                     self.publish_marker_command(self.current_marker, "EXECUTE")
