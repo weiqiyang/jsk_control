@@ -233,6 +233,7 @@ list_length [Int32, default: 5]: maximum length of pose_list. will overwrite the
         new_pose.pose.orientation.z = new_q[2]
         new_pose.pose.orientation.w = new_q[3]
 
+<<<<<<< HEAD
         # process command keys
         if not (status.R3 and status.R2 and status.L2):
             if status.circle and not latest.circle:
@@ -247,6 +248,22 @@ list_length [Int32, default: 5]: maximum length of pose_list. will overwrite the
                 self.publish_pose_command(new_pose, self.cross_cmd)
                 if and self.save_key == self.CROSS:
                     self.save_current_pose(new_pose)
+=======
+    # process command keys
+    if not (status.R3 and status.R2 and status.L2):
+      if status.circle and not latest.circle:
+        self.publish_pose_command(new_pose, self.circle_cmd)
+        if self.save_key == self.CIRCLE:
+          self.save_current_pose(new_pose)
+      if status.triangle and not latest.triangle:
+        self.publish_pose_command(new_pose, self.triangle_cmd)
+        if self.save_key == self.TRIANGLE:
+          self.save_current_pose(new_pose)
+      if status.cross and not latest.cross:
+        self.publish_pose_command(new_pose, self.cross_cmd)
+        if self.save_key == self.CROSS:
+          self.save_current_pose(new_pose)
+>>>>>>> e961992d7be2dd4158e752cc72c363ba9925f62e
 
         # publish at 10hz
         if self.publish_pose:
