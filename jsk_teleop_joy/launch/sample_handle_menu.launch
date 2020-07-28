@@ -4,6 +4,7 @@
   <arg name="POSE_REMAP" default="joy_pose" />
   <arg name="FRAME_ID" default="map" />
 
+  <arg name="publish_js" default="false" />
   <arg name="gui" default="true" />
 
   <node pkg="joy" type="joy_node" name="joy_driver" output="screen" >
@@ -17,11 +18,10 @@
     <param name="controller_type" value="$(arg CONTROLLER_TYPE)" />
     <rosparam subst_value="true">
       plugins:
-        'MarkerArray':
-          class: 'JoyMarkerArray'
+        'Handle':
+          class: 'HandleOperator'
           args:
             menu: "overlay_menu"
-            type: 3
             lock_xy: True
             publish_pose: True
             pose: $(arg POSE_REMAP)
