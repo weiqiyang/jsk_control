@@ -41,8 +41,7 @@ Check publish_help() for controller configurations.
 
 Args:
 publish_pose [Boolean, default: True]: publish pose or not
-title [String, default: MarkerList]: title of the menu
-history [String, default: history]: rosparam name to load pose list
+title [String, default: Handle Operator]: title of the menu
 marker_pose [String, default: marker_pose]: topic name to publishing marker pose
 menu [String, default: dynamic_menu]: topic name to publish the menu
 help_text [String, default: help_text]: topic name to publish overlay help text
@@ -51,6 +50,7 @@ frame_id [String, default: map]: frame_id of publishing pose
 namespace [String, default: joy_markers]: namespace to publish the marker
 type [Int, default: 3]: type of the marker, cylinder by default
 show_label [Boolean, default: False]: display labels for marks or not
+sample_rad [float, defaulf: 0.3]: difference in rad of samples
     '''
     STATE_INITIALIZATION = 1
     STATE_RUNNING = 2
@@ -78,7 +78,7 @@ show_label [Boolean, default: False]: display labels for marks or not
         self.confirm_index = 0
         self.selecting_index = 0
         self.markers = MarkerArray()
-        self.title = self.getArg('title', 'MarkerList')
+        self.title = self.getArg('title', 'Handle Operator')
         self.pose_pub = rospy.Publisher(self.getArg('marker_pose', 'marker_pose'),
                                         PoseStamped, queue_size=10)
         self.menu_pub = rospy.Publisher(self.getArg('menu', 'dynamic_menu'),
@@ -97,8 +97,12 @@ show_label [Boolean, default: False]: display labels for marks or not
         self.namespace = self.getArg('namespace', 'joy_markers')
         self.show_label = self.getArg('show_label', False)
         self.isClosed = True
+        self.sample_rad = self.getArg('sample_rad', 0.3)
 
         self.mode = 0
+        self.angle = 0.0
+        self.handle_marker = None
+        self.axis_marker = None
 
         #TODO self.loadMarkers()
         self.start()
@@ -211,14 +215,7 @@ show_label [Boolean, default: False]: display labels for marks or not
                 self.mode = self.MODE_MARKER
                 self.publish_help()
         elif self.mode == self.MODE_OPERATE:
-            if history.new(status, "cross"):
-                self.mode = self.MODE_MENU
-                self.publish_menu(self.current_index)
-            elif status.circle:
-                if status.left_analog_down:
-                    self.command_pub.publish("PULLTEST+")
-                if status.left_analog_up:
-                    self.command_pub.publish("PULLTEST-")
+            self.operate_joy_cb(status, history)
 
 
     def switch_marker(self, index):
@@ -229,6 +226,8 @@ show_label [Boolean, default: False]: display labels for marks or not
             ns = 'handle'
         elif index == 2:
             ns = 'axis'
+        elif index == 3:
+            ns = 'target'
         rospy.loginfo("current ns: " + ns)
 
         if not self.current_marker == None:
@@ -238,6 +237,7 @@ show_label [Boolean, default: False]: display labels for marks or not
         for m in self.markers.markers:
             if m.ns == ns:
                 self.current_marker = m
+                self.set_color(self.current_marker, highlight=True)
 
         self.publish_markers()
 
@@ -471,6 +471,106 @@ show_label [Boolean, default: False]: display labels for marks or not
                 self.mode = self.MODE_UNSAVED
                 self.publish_help()
 
+    def operate_joy_cb(self, status, history):
+        if self.handle_marker == None:
+            rospy.logwarn("Handle not defined")
+            self.mode = self.MODE_MENU
+            self.publish_menu(self.current_index)
+        pre_pose = self.pre_pose
+        marker = self.current_marker
+        samples = []
+        if self.current_marker == None:
+            marker = copy.deepcopy(self.handle_marker)
+            marker.ns = "target"
+            self.set_color(marker, highlight=True)
+            self.markers.markers.append(marker)
+            self.current_marker = marker
+
+        marker.scale = self.handle_marker.scale
+        marker.pose.orientation = self.handle_marker.pose.orientation
+        axis = self.axis_marker.pose.orientation
+        #q = numpy.array((axis.x, axis.y, axis.z, axis.w))
+        #drct = tf.transformations.euler_from_quaternion(q)
+        drct = numpy.array((2 * (axis.x * axis.z - axis.y * axis.w),
+                            2 * (axis.y * axis.z - axis.x * axis.w),
+                            1 - 2 * (axis.x * axis.x + axis.y * axis.y)))
+        origin = self.axis_marker.pose.position
+        p0 = numpy.array((origin.x, origin.y, origin.z))
+        handle_p = numpy.array((self.handle_marker.pose.position.x,
+                                self.handle_marker.pose.position.y,
+                                self.handle_marker.pose.position.z, 1.0))
+
+        DELTA = 0.02
+        if history.length() > 0:
+            latest = history.latest()
+            if status.R3 and status.L2 and status.R2 and not (latest.R3 and latest.L2 and latest.R2):
+                self.view_controller.followView(not view_controller.followView())
+        if self.view_controller.control_view:
+            self.view_controller.joyCB(status, history)
+
+        if not status.R3:
+            if status.up:
+                if status.square:
+                    self.angle = self.angle + DELTA * 5
+                elif history.all(lambda s: s.up):
+                    self.angle = self.angle + DELTA * 2
+                else:
+                    self.angle = self.angle + DELTA
+            elif status.down:
+                if status.square:
+                    self.angle = self.angle - DELTA * 5
+                elif history.all(lambda s: s.down):
+                    self.angle = self.angle - DELTA * 2
+                else:
+                    self.angle = self.angle - DELTA
+            if self.angle > numpy.pi:
+                self.angle = self.angle - numpy.pi * 2
+            elif self.angle < - numpy.pi:
+                self.angle = self.angle + numpy.pi * 2
+            rot_m = tf.transformations.rotation_matrix(self.angle, drct, p0)
+            tp = numpy.dot(rot_m, handle_p)
+            marker.pose.position.x = tp[0]
+            marker.pose.position.y = tp[1]
+            marker.pose.position.z = tp[2]
+            if history.new(status, "cross"):
+                self.mode = self.MODE_MENU
+                self.publish_menu(self.current_index)
+            elif status.circle:
+                for m in self.markers.markers:
+                    if m.ns == "sample":
+                        m.action = Marker.DELETE
+                #for m in self.markers.markers:
+                #    if m.ns == "sample":
+                #        self.markers.markers.remove(m)
+                a_sign = 1
+                if self.angle < 0.0:
+                    a_sign = -1
+                sample_id = 0
+                current_rad = self.sample_rad
+                while current_rad < self.angle * a_sign:
+                    sample_marker = copy.deepcopy(self.handle_marker)
+                    sample_marker.ns = "sample"
+                    self.set_color(sample_marker, highlight=True)
+                    sample_marker.color.a = 0.7
+                    sample_marker.id = sample_id
+                    mat = tf.transformations.rotation_matrix(current_rad * a_sign, drct, p0)
+                    sp = numpy.dot(mat, handle_p)
+                    sample_marker.pose.position.x = sp[0]
+                    sample_marker.pose.position.y = sp[1]
+                    sample_marker.pose.position.z = sp[2]
+                    self.markers.markers.append(sample_marker)
+                    current_rad += self.sample_rad
+                    sample_id += 1
+                sample_marker = copy.deepcopy(self.current_marker)
+                sample_marker.ns = "sample"
+                self.set_color(sample_marker, highlight=True)
+                sample_marker.color.a = 0.7
+                sample_marker.id = sample_id
+                self.markers.markers.append(sample_marker)
+
+        self.publish_markers()
+
+
     def init_marker(self):
         self.pre_marker = copy.deepcopy(self.current_marker)
         marker = self.current_marker
@@ -482,10 +582,12 @@ show_label [Boolean, default: False]: display labels for marks or not
             marker.type = self.type
             if self.current_index == 0:
                 marker.ns = 'handle'
+                self.handle_marker = marker
             elif self.current_index == 1:
                 marker.ns = 'surface'
             elif self.current_index == 2:
                 marker.ns = 'axis'
+                self.axis_marker = marker
 
             marker.pose.orientation.w = 1.0
             marker.scale.x = 0.1

@@ -59,7 +59,7 @@ show_label [Boolean, default: False]: display labels for marks or not
     MODE_MANIP = 5
     mode = 0
 
-    assoc_flag = false
+    assoc_flag = False
 
     markers = MarkerArray()
     pending_markers = []
@@ -601,7 +601,7 @@ show_label [Boolean, default: False]: display labels for marks or not
                         self.selecting_index = 0
                     self.switch_marker(self.selecting_index)
                 if history.new(status, "triangle"):
-                    if assoc_flag:
+                    if self.assoc_flag:
                         self.publish_marker_command(self.current_marker, "ASSOC_PREVIEW")
                     else:
                         rospy.logwarn("Please assoc current pose after initial preview.")
@@ -712,9 +712,9 @@ show_label [Boolean, default: False]: display labels for marks or not
                 m.ns = self.namespace + "_label"
                 m.text = txt
                 m.pose.position.z += m.scale.z
-                m.scale.x = 0.2
-                m.scale.y = 0.2
-                m.scale.z = 0.2
+                m.scale.x = 0.1
+                m.scale.y = 0.1
+                m.scale.z = 0.1
                 m.color.r = 1.0
                 m.color.g = 1.0
                 m.color.b = 1.0
@@ -739,10 +739,9 @@ show_label [Boolean, default: False]: display labels for marks or not
 Up/Down: Choose item
 Triangle: Show markers' route
 Triangle + Up/Down: Change order
-Triangle + R1: [WIP] Preview IK for current marker
 Square: Delete current marker
 Circle: Add new / Edite existing marker
-Start: [WIP] Execute 
+Start: Execute Mode
             """
         elif self.mode == self.MODE_MARKER:
             text.height = 342
@@ -751,7 +750,7 @@ Left Analog: Translate xy
 D-pad: Rotate pitch/roll
 R1 + Left/Right: Rotate yaw
 L1 + Up/Down: Change marker hight (z)
-L1 + Left/Right: Cchange marker y size
+L1 + Left/Right: Change marker y size
 L2/R2: Translate z
 Square(Hold): Move faster
 
@@ -759,9 +758,31 @@ Right Analog: yaw/pitch of camera position
 R3(Hold): suppressing buttons/sticks for controlling pose
 R3 + L2+R2: enable follow view mode
 
-Select: [WIP] Load from bounding box
-Triangle: [WIP] Preview IK
+Select: Load from bounding box
+Triangle: Switch to manip mode
 Circle: Save and goto the next
+Cross: Quit (without saving)
+            """
+        elif self.mode == self.MODE_MANIP:
+            text.height = 342
+            text.text = """Joy Control Help
+Left Analog: Translate xy
+D-pad: Rotate pitch/roll
+R1 + Left/Right: Rotate yaw
+L1 + Up/Down: Change marker hight (z)
+L1 + Left/Right: Change marker y size
+L2/R2: Translate z
+Square(Hold): Move faster
+
+Right Analog: yaw/pitch of camera position
+R3(Hold): suppressing buttons/sticks for controlling pose
+R3 + L2+R2: enable follow view mode
+
+Triangle: Preview IK for current pose
+Circle: Bind current pose to object
+L1 + Triangle: Preview IK for current object
+L1 + Circle: Excute current IK
+Select: Reset robot pose
 Cross: Quit (without saving)
             """
         elif self.mode == self.MODE_UNSAVED or self.mode == self.MODE_DELETE:
