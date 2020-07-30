@@ -5,6 +5,7 @@ import numpy
 import copy
 
 import rospy
+import rosbag
 import os
 import sys
 import time
@@ -64,7 +65,8 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
     MODE_DELETE = 5
     MODE_UNSAVED = 6
 
-    menu_list = ['Set Handle', 'Set Door Surface', 'Set Door Axis', 'Operate']
+    # deleted 'Set Door Surface'
+    menu_list = ['Set Handle', 'Set Door Axis', 'Operate']
 
     def __init__(self, name, args):
         JSKJoyPlugin.__init__(self, name, args)
@@ -136,6 +138,26 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
                 if history.new(status, "R1"):
                     #TODO preview ik
                     rospy.logdebug("preview ik")
+            elif status.L1 and history.new(status, "start"):
+                bag = rosbag.Bag('marker.bag', 'w')
+                try:
+                    manip_pose = PoseStamped()
+                    if self.handle_marker == None:
+                        manip_pose = None
+                    else:
+                        manip_pose.header = self.handle_marker.header
+                        manip_pose.pose = self.handle_marker.pose
+                    marker_array = MarkerArray()
+                    for marker in self.markers.markers:
+                        if marker.ns == "handle":
+                            marker_array.markers.insert(0, marker)
+                        elif marker.ns == "sample":
+                            marker_array.markers.append(marker)
+                    bag.write('markers', marker_array)
+                    rospy.loginfo("Saved " + str(len(marker_array.markers)) + " markers.")
+                    bag.write('pose', manip_pose)
+                finally:
+                    bag.close()
             else:
                 if history.new(status, "down") or history.new(status, "left_analog_down"):
                     self.selecting_index = self.selecting_index + 1
@@ -152,7 +174,7 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
                 elif history.new(status, "circle"):
                     # close menu and edit
                     self.publish_menu(self.selecting_index, close=True)
-                    if self.selecting_index == 3:
+                    if self.selecting_index == 2:
                         self.mode = self.MODE_OPERATE
                     else:
                         self.init_marker()
@@ -224,9 +246,9 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
         rospy.loginfo("current index: " + str(index))
         if index == 0:
             ns = 'handle'
-        elif index == 2:
+        elif index == 1:
             ns = 'axis'
-        elif index == 3:
+        elif index == 2:
             ns = 'target'
         rospy.loginfo("current ns: " + ns)
 
@@ -388,6 +410,7 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
                 ## uniform all markers' size
                 #for m in self.markers.markers:
                 #    m.scale = marker.scale
+
             # rotate
             elif status.R1:
                 if status.left:
@@ -535,13 +558,17 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
             if history.new(status, "cross"):
                 self.mode = self.MODE_MENU
                 self.publish_menu(self.current_index)
-            elif status.circle:
+            elif history.new(status, "circle"):
                 for m in self.markers.markers:
                     if m.ns == "sample":
                         m.action = Marker.DELETE
-                #for m in self.markers.markers:
-                #    if m.ns == "sample":
-                #        self.markers.markers.remove(m)
+                self.publish_markers()
+                d_list = []
+                for m in self.markers.markers:
+                    if m.ns == "sample":
+                        d_list.append(m)
+                for m in d_list:
+                    self.markers.markers.remove(m)
                 a_sign = 1
                 if self.angle < 0.0:
                     a_sign = -1
@@ -583,9 +610,9 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
             if self.current_index == 0:
                 marker.ns = 'handle'
                 self.handle_marker = marker
-            elif self.current_index == 1:
+            elif self.current_index == -1:
                 marker.ns = 'surface'
-            elif self.current_index == 2:
+            elif self.current_index == 1:
                 marker.ns = 'axis'
                 self.axis_marker = marker
 

@@ -8,6 +8,7 @@ import time
 import copy
 
 import rospy
+import rosbag
 import tf
 
 from sensor_msgs.msg import Joy
@@ -163,6 +164,42 @@ show_label [Boolean, default: False]: display labels for marks or not
                     # Show marker route (lifetime 5s)
                     rospy.logdebug("show route")
                     self.show_route()
+            elif status.L1:
+                if history.new(status, "select"):
+                    bag = rosbag.Bag('marker.bag')
+                    last_pt = []
+                    for topic, msg, t in bag.read_messages(topics=['markers', 'pose']):
+                        last_pt.append(msg)
+                    bag.close()
+                    l = len(last_pt)
+                    rospy.loginfo("msg length: "+str(l))
+                    if l > 1:
+                        self.markers = last_pt[l-2]
+                        rospy.loginfo("Load "+str(len(self.markers.markers)) + " markers.")
+                        self.manip_pose = last_pt[l-1]
+                        #reset marker list
+                        self.next_id = 0
+                        self.current_index = 0
+                        self.current_marker = None
+                        self.menu_list = ['Add new ...']
+                        for marker in self.markers.markers:
+                            marker.id = self.next_id
+                            marker.ns = self.namespace
+                            self.set_color(marker, highlight=False)
+                            self.menu_list.insert(self.current_index, "Marker"+str(marker.id))
+                            self.next_id += 1
+                            self.current_index += 1
+                            self.current_marker = marker
+                        self.publish_markers()
+                        #rospy.loginfo("Menu length"+str(len(self.menu_list)))
+                elif history.new(status, "start"):
+                    bag = rosbag.Bag('marker.bag', 'w')
+                    try:
+                        bag.write('markers', self.markers)
+                        bag.write('pose', self.manip_pose)
+                        rospy.loginfo("saved")
+                    finally:
+                        bag.close()
             else:
                 if history.new(status, "down") or history.new(status, "left_analog_down"):
                     self.selecting_index = self.selecting_index + 1
@@ -493,7 +530,7 @@ show_label [Boolean, default: False]: display labels for marks or not
             self.prev_time = now
 
         # process command keys
-        if not (status.R3 and status.R2 and status.L2):
+        if not (status.R3 and status.R2 and status.L2 and status.L1):
             if history.new(status, "select"):
                 #command_pub.publish("SHARE_BBOX")
                 try:
@@ -526,7 +563,8 @@ show_label [Boolean, default: False]: display labels for marks or not
                     rospy.logwarn("Time out. Failed to get bounding boxes from " + self.bbox_topic)
             if history.new(status, "circle"):
                 self.set_color(marker, highlight=False)
-                self.next_id += 1
+                if self.pre_marker == None:
+                    self.next_id += 1
                 self.current_index += 1
                 self.switch_marker(self.current_index)
                 self.init_marker()
@@ -619,10 +657,11 @@ show_label [Boolean, default: False]: display labels for marks or not
                 elif history.new(status, "circle"):
                     self.assoc_flag = True
                     self.publish_marker_command(self.current_marker, "ASSOC")
-                elif history.new(status, "start"):
+                elif history.new(status, "start") and not status.select:
                     self.publish_marker_command(self.current_marker, "EXECUTE")
-                elif history.new(status, "select"):
-                    self.publish_marker_command(self.current_marker, "RESET_MANIP")
+                # Delete reset manip for conflicting with ipega home setting (select+start)
+                #elif history.new(status, "select"):
+                #    self.publish_marker_command(self.current_marker, "RESET_MANIP")
                 if history.new(status, "cross"):
                     self.mode = self.MODE_MENU
                     self.publish_menu(self.selecting_index)
