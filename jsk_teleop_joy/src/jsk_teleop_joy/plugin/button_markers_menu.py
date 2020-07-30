@@ -510,7 +510,7 @@ show_label [Boolean, default: False]: display labels for marks or not
         # process command keys
         if not (status.R3 and status.R2 and status.L2):
             if history.new(status, "select"):
-                command_pub.publish("SHARE_BBOX")
+                self.command_pub.publish("SHARE_BBOX")
             if history.new(status, "circle"):
                 self.set_color(marker, highlight=False)
                 if marker.id == self.next_id:

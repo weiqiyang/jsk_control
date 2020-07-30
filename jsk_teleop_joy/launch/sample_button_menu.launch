@@ -32,7 +32,7 @@
             follow_view: true
             marker_pose: "marker_pose"
             show_label: True
-            circle_cmd: "EXECUTE"
+            circle_cmd: "BTN_EXECUTE"
             triangle_cmd: "PREVIEW"
     </rosparam>
   </node>
