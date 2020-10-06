@@ -782,7 +782,7 @@ Triangle: Show markers' route
 Triangle + Up/Down: Change order
 Square: Delete current marker
 Circle: Add new / Edite existing marker
-Start: Execute Mode
+Start: Execute Mode (Not yet)
             """
         elif self.mode == self.MODE_MARKER:
             text.height = 342
@@ -805,7 +805,7 @@ Circle: Save and goto the next
 Cross: Quit (without saving)
             """
         elif self.mode == self.MODE_MANIP:
-            text.height = 342
+            text.height = 382
             text.text = """Joy Control Help
 Left Analog: Translate xy
 D-pad: Rotate pitch/roll
@@ -824,7 +824,6 @@ Circle: Bind current pose to object
 L1 + Triangle: Preview IK for current object
 L1 + Circle: Excute current IK
 Select: Reset robot pose
-Cross: Quit (without saving)
             """
         elif self.mode == self.MODE_UNSAVED or self.mode == self.MODE_DELETE:
             text.height = 77
