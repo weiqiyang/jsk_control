@@ -576,6 +576,7 @@ bbox_topic[String, default: multi_euclidean_cluster_point_indices_decomposer/box
                 else:
                     self.init_manip_pose(self.current_marker)
                     self.mode = self.MODE_MANIP
+                    self.publish_help()
             if history.new(status, "cross"):
                 # confirm and back to menu
                 rospy.loginfo("Need confirm before quit.")
@@ -794,9 +795,9 @@ L1 + Left/Right: Change marker y size
 L2/R2: Translate z
 Square(Hold): Move faster
 
-Right Analog: yaw/pitch of camera position
-R3(Hold): suppressing buttons/sticks for controlling pose
-R3 + L2+R2: enable follow view mode
+Right Analog: Yaw/pitch of camera position
+R3(Hold) + arrow buttons/sticks: Move camera
+R3 + L2+R2: Enable follow view mode
 
 Select: Load from bounding box
 Triangle: Switch to manip mode
@@ -815,7 +816,7 @@ L2/R2: Translate z
 Square(Hold): Move faster
 
 Right Analog: yaw/pitch of camera position
-R3(Hold): suppressing buttons/sticks for controlling pose
+R3(Hold) + arrow buttons/sticks: Move camera
 R3 + L2+R2: enable follow view mode
 
 Triangle: Preview IK for current pose
