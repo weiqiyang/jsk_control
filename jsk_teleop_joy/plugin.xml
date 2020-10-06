@@ -12,6 +12,8 @@
   </class>
   <class name="JoyPose6D" type="jsk_teleop_joy.plugin.joy_pose_6d.JoyPose6D">
   </class>
+  <class name="HsrGoSpot" type="jsk_teleop_joy.plugin.hsr_go_spot.HsrGoSpot">
+  </class>
   <class name="JoyMarkerPublisher" type="jsk_teleop_joy.plugin.joy_marker_publisher.JoyMarkerPublisher">
   </class>
   <class name="JoyMarkerArray" type="jsk_teleop_joy.plugin.joy_marker_array.JoyMarkerArray">

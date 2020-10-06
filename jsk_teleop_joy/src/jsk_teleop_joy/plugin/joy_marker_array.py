@@ -30,7 +30,7 @@ def signed_square(val):
         sign = -1
     return val * val * sign
 
-class JoyMarkerArray(JSKJoyPlugin):
+class JoyMarkerArray(RVizViewController):
     '''
 Usage:
 Check publish_help() for controller configurations.
@@ -47,6 +47,7 @@ frame_id [String, default: map]: frame_id of publishing pose
 namespace [String, default: joy_markers]: namespace to publish the marker
 type [Int, default: 3]: type of the marker, cylinder by default
 show_label [Boolean, default: False]: display labels for marks or not
+bbox_topic[String, default: multi_euclidean_cluster_point_indices_decomposer/boxes]: bbox topic name to subscribe for initializing marker array
     '''
     STATE_INITIALIZATION = 1
     STATE_RUNNING = 2
@@ -70,13 +71,12 @@ show_label [Boolean, default: False]: display labels for marks or not
 
 
     def __init__(self, name, args):
-        JSKJoyPlugin.__init__(self, name, args)
+        RVizViewController.__init__(self, name, args)
         self.pre_pose = PoseStamped()
         self.pre_pose.pose.orientation.w = 1
         self.prev_time = rospy.Time.from_sec(time.time())
         self.publish_pose = self.getArg('publish_pose', True)
-        self.view_controller = RVizViewController(name, args)
-        self.view_controller.pre_pose = self.pre_pose
+        self.supportFollowView(True)
         self.current_index = 0
         self.selecting_index = 0
         self.title = self.getArg('title', 'MarkerList')
@@ -190,6 +190,7 @@ show_label [Boolean, default: False]: display labels for marks or not
                             self.next_id += 1
                             self.current_index += 1
                             self.current_marker = marker
+                        self.current_index = 0
                         self.publish_markers()
                         #rospy.loginfo("Menu length"+str(len(self.menu_list)))
                 elif history.new(status, "start"):
@@ -358,9 +359,9 @@ show_label [Boolean, default: False]: display labels for marks or not
         if history.length() > 0:
             latest = history.latest()
             if status.R3 and status.L2 and status.R2 and not (latest.R3 and latest.L2 and latest.R2):
-                self.view_controller.followView(not view_controller.followView())
-        if self.view_controller.control_view:
-            self.view_controller.joyCB(status, history)
+                self.followView(not self.followView())
+        if self.control_view:
+            RVizViewController.joyCB(self, status, history)
         new_pose = PoseStamped()
         new_pose.header.frame_id = self.frame_id
         new_pose.header.stamp = rospy.Time(0.0)

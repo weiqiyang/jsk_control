@@ -5,6 +5,7 @@ import numpy
 import copy
 
 import rospy
+import rosbag
 import os
 import sys
 import time
@@ -165,6 +166,52 @@ show_label [Boolean, default: False]: display labels for marks or not
                         self.publish_menu(self.selecting_index, close=True)
                         self.init_button_pose(self.current_marker)
                         self.mode = self.MODE_EXECUTE
+            elif status.L1:
+                if history.new(status, "select"):
+                    bag = rosbag.Bag('button.bag')
+                    last_pt = []
+                    for topic, msg, t in bag.read_messages(topics=['markers', 'pose']):
+                        last_pt.append(msg)
+                    bag.close()
+                    l = len(last_pt)
+                    rospy.loginfo("msg length: "+str(l))
+                    if l > 1:
+                        self.markers = last_pt[l-2]
+                        rospy.loginfo("Load "+str(len(self.markers.markers)) + " markers.")
+                        self.manip_pose = last_pt[l-1]
+                        #reset marker list
+                        self.next_id = 0
+                        self.current_index = 0
+                        self.current_marker = None
+                        self.menu_list = ['Add new ...']
+                        for marker in self.markers.markers:
+                            marker.id = self.next_id
+                            marker.ns = self.namespace
+                            self.set_color(marker, highlight=False)
+                            self.menu_list.insert(self.current_index, "Marker"+str(marker.id))
+                            self.next_id += 1
+                            self.current_index += 1
+                            self.current_marker = marker
+                        self.current_index = 0
+                        self.publish_markers()
+                        #rospy.loginfo("Menu length"+str(len(self.menu_list)))
+                elif history.new(status, "start"):
+                    bag = rosbag.Bag('button.bag', 'w')
+                    try:
+                        manip_pose = PoseStamped()
+                        if self.pre_pose == None:
+                            manip_pose = None
+                        else:
+                            manip_pose.header = self.pre_pose.header
+                            manip_pose.pose = self.pre_pose.pose
+                        marker_array = MarkerArray()
+                        for marker in self.markers.markers:
+                            marker_array.markers.append(marker)
+                        bag.write('markers', marker_array)
+                        rospy.loginfo("Saved " + str(len(marker_array.markers)) + " markers.")
+                        bag.write('pose', manip_pose)
+                    finally:
+                        bag.close()
             else:
                 if history.new(status, "down") or history.new(status, "left_analog_down"):
                     self.selecting_index = self.selecting_index + 1
