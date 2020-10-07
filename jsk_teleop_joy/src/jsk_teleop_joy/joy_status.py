@@ -459,13 +459,13 @@ class VirtualStatus(JoyStatus):
         else:
             self.triangle = False
         if msg.buttons[1] == 1:
-            self.cross = True
-        else:
-            self.cross = False
-        if msg.buttons[2] == 1:
             self.circle = True
         else:
             self.circle = False
+        if msg.buttons[2] == 1:
+            self.cross = True
+        else:
+            self.cross = False
         if msg.buttons[3] == 1:
             self.square = True
         else:
