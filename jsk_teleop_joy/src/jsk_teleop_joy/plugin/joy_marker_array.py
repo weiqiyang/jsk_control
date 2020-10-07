@@ -20,7 +20,7 @@ from diagnostic_msgs.msg import DiagnosticStatus, DiagnosticArray
 from jsk_recognition_msgs.msg import BoundingBox, BoundingBoxArray
 from jsk_rviz_plugins.msg import OverlayMenu, OverlayText
 from jsk_teleop_joy.joy_plugin import JSKJoyPlugin
-from jsk_teleop_joy.confirm_menu import YesNoMenu
+from confirm_menu import YesNoMenu
 from joy_rviz_view_controller import RVizViewController
 
 def signed_square(val):
