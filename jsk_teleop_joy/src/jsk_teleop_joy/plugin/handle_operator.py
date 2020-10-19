@@ -35,7 +35,7 @@ def signed_square(val):
         sign = -1
     return val * val * sign
 
-class HandleOperator(JSKJoyPlugin):
+class HandleOperator(RVizViewController):
     '''
 Usage:
 Check publish_help() for controller configurations.
@@ -62,20 +62,20 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
     MODE_MARKER = 2
     MODE_AXIS = 3
     MODE_OPERATE = 4
-    MODE_DELETE = 5
-    MODE_UNSAVED = 6
+    MODE_MANIP = 5
+    MODE_UNSAVED = 10
+    MODE_DELETE = 11
 
     # deleted 'Set Door Surface'
     menu_list = ['Set Handle', 'Set Door Axis', 'Operate']
 
     def __init__(self, name, args):
-        JSKJoyPlugin.__init__(self, name, args)
+        RVizViewController.__init__(self, name, args)
+        self.supportFollowView(True)
         self.pre_pose = PoseStamped()
         self.pre_pose.pose.orientation.w = 1
         self.prev_time = rospy.Time.from_sec(time.time())
         self.publish_pose = self.getArg('publish_pose', True)
-        self.view_controller = RVizViewController(name, args)
-        self.view_controller.pre_pose = self.pre_pose
         self.current_index = 0
         self.confirm_index = 0
         self.selecting_index = 0
@@ -83,6 +83,8 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
         self.title = self.getArg('title', 'Handle Operator')
         self.pose_pub = rospy.Publisher(self.getArg('marker_pose', 'marker_pose'),
                                         PoseStamped, queue_size=10)
+        self.target_pub = rospy.Publisher(self.getArg('target_pose', 'target_pose'),
+                                        PoseStamped, queue_size=1)
         self.menu_pub = rospy.Publisher(self.getArg('menu', 'dynamic_menu'),
                                         OverlayMenu, queue_size=10)
         self.marker_array_pub = rospy.Publisher(self.getArg('marker_array', 'marker_array'),
@@ -105,6 +107,7 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
         self.angle = 0.0
         self.handle_marker = None
         self.axis_marker = None
+        self.manip_pose = None
 
         #TODO self.loadMarkers()
         self.start()
@@ -238,7 +241,8 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
                 self.publish_help()
         elif self.mode == self.MODE_OPERATE:
             self.operate_joy_cb(status, history)
-
+        elif self.mode == self.MODE_MANIP:
+            self.manip_joy_cb(status, history)
 
     def switch_marker(self, index):
         self.current_index = index
@@ -301,15 +305,14 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
             self.isClosed = True
         self.menu_pub.publish(menu)
 
-    def marker_joy_cb(self, status, history):
+    def pose_joy_cb(self, status, history):
         pre_pose = self.pre_pose
-        marker = self.current_marker
         if history.length() > 0:
             latest = history.latest()
             if status.R3 and status.L2 and status.R2 and not (latest.R3 and latest.L2 and latest.R2):
-                self.view_controller.followView(not view_controller.followView())
-        if self.view_controller.control_view:
-            self.view_controller.joyCB(status, history)
+                self.followView(not self.followView())
+        if self.control_view:
+            RVizViewController.joyCB(self, status, history)
         new_pose = PoseStamped()
         new_pose.header.frame_id = self.frame_id
         new_pose.header.stamp = rospy.Time(0.0)
@@ -339,80 +342,27 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
                 z_scale = 2.0
             else:
                 z_scale = 1.0
-            local_move = numpy.array((x_diff, y_diff,
-                                      z_diff * z_scale, 
-                                      1.0))
+            local_move = numpy.array((x_diff, y_diff, z_diff * z_scale, 1.0))
         else:
             local_move = numpy.array((0.0, 0.0, 0.0, 1.0))
+
         q = numpy.array((pre_pose.pose.orientation.x,
-                                         pre_pose.pose.orientation.y,
-                                         pre_pose.pose.orientation.z,
-                                         pre_pose.pose.orientation.w))
-        xyz_move = numpy.dot(tf.transformations.quaternion_matrix(q), local_move)
+                         pre_pose.pose.orientation.y,
+                         pre_pose.pose.orientation.z,
+                         pre_pose.pose.orientation.w))
+        xyz_move = numpy.dot(tf.transformations.quaternion_matrix(q),
+                             local_move)
         new_pose.pose.position.x = pre_pose.pose.position.x + xyz_move[0]
         new_pose.pose.position.y = pre_pose.pose.position.y + xyz_move[1]
         new_pose.pose.position.z = pre_pose.pose.position.z + xyz_move[2]
+
+        # rotate
         roll = 0.0
         pitch = 0.0
         yaw = 0.0
         DTHETA = 0.02
-        DSCALE = 0.002
-        if not status.R3:
-            # scale
-            if status.L1:
-                # scale xy
-                if status.square:
-                    xscale_diff = status.left_analog_y * DSCALE * 15
-                    yscale_diff = status.left_analog_x * DSCALE * 15
-                else:
-                    xscale_diff = status.left_analog_y * DSCALE * 5
-                    yscale_diff = status.left_analog_x * DSCALE * 5
-                marker.scale.x = marker.scale.x + xscale_diff
-                if self.lock_xy:
-                    marker.scale.y = marker.scale.x
-                marker.scale.y = marker.scale.y + yscale_diff
-                if self.lock_xy:
-                    marker.scale.x = marker.scale.y
-                # scale z
-                if status.up:
-                    if status.square:
-                        marker.scale.z = marker.scale.z + DSCALE * 5
-                    elif history.all(lambda s: s.up):
-                        marker.scale.z = marker.scale.z + DSCALE * 2
-                    else:
-                        marker.scale.z = marker.scale.z + DSCALE
-                elif status.down:
-                    if status.square:
-                        marker.scale.z = marker.scale.z - DSCALE * 5
-                    elif history.all(lambda s: s.down):
-                        marker.scale.z = marker.scale.z - DSCALE * 2
-                    else:
-                        marker.scale.z = marker.scale.z - DSCALE
-                if history.new(status, "R1"):
-                    self.lock_xy = not self.lock_xy
-                    if self.lock_xy:
-                        marker.scale.x = marker.scale.y
-                        # torque between cube (type=1) and cylinder (type=3)
-                        self.type = 4 - self.type
-                        for m in self.markers.markers:
-                            m.type = self.type
-                    else:
-                        marker.scale.x *= 0.6
-
-                # keep minimun scale value
-                if not marker.scale.x > 0:
-                    marker.scale.x = DSCALE
-                if not marker.scale.y > 0:
-                    marker.scale.y = DSCALE
-                if not marker.scale.z > 0:
-                    marker.scale.z = DSCALE
-
-                ## uniform all markers' size
-                #for m in self.markers.markers:
-                #    m.scale = marker.scale
-
-            # rotate
-            elif status.R1:
+        if not status.R3 and not status.L1:
+            if status.R1:
                 if status.left:
                     if status.square:
                         yaw = yaw + DTHETA * 5
@@ -462,7 +412,68 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
         new_pose.pose.orientation.y = new_q[1]
         new_pose.pose.orientation.z = new_q[2]
         new_pose.pose.orientation.w = new_q[3]
-        marker.pose = new_pose.pose
+
+        self.pre_pose = new_pose
+
+    def marker_joy_cb(self, status, history):
+        pre_pose = self.pre_pose
+        marker = self.current_marker
+        self.pose_joy_cb(status, history)
+        new_pose = self.pre_pose
+        marker.pose = self.pre_pose.pose
+
+        # scale
+        if not status.R3 and status.L1:
+            # scale xy
+            if status.square:
+                xscale_diff = status.left_analog_y * DSCALE * 15
+                yscale_diff = status.left_analog_x * DSCALE * 15
+            else:
+                xscale_diff = status.left_analog_y * DSCALE * 5
+                yscale_diff = status.left_analog_x * DSCALE * 5
+            marker.scale.x = marker.scale.x + xscale_diff
+            if self.lock_xy:
+                marker.scale.y = marker.scale.x
+            marker.scale.y = marker.scale.y + yscale_diff
+            if self.lock_xy:
+                marker.scale.x = marker.scale.y
+            # scale z
+            if status.up:
+                if status.square:
+                    marker.scale.z = marker.scale.z + DSCALE * 5
+                elif history.all(lambda s: s.up):
+                    marker.scale.z = marker.scale.z + DSCALE * 2
+                else:
+                    marker.scale.z = marker.scale.z + DSCALE
+            elif status.down:
+                if status.square:
+                    marker.scale.z = marker.scale.z - DSCALE * 5
+                elif history.all(lambda s: s.down):
+                    marker.scale.z = marker.scale.z - DSCALE * 2
+                else:
+                    marker.scale.z = marker.scale.z - DSCALE
+            if history.new(status, "R1"):
+                self.lock_xy = not self.lock_xy
+                if self.lock_xy:
+                    marker.scale.x = marker.scale.y
+                    # torque between cube (type=1) and cylinder (type=3)
+                    self.type = 4 - self.type
+                    for m in self.markers.markers:
+                        m.type = self.type
+                else:
+                    marker.scale.x *= 0.6
+
+            # keep minimun scale value
+            if not marker.scale.x > 0:
+                marker.scale.x = DSCALE
+            if not marker.scale.y > 0:
+                marker.scale.y = DSCALE
+            if not marker.scale.z > 0:
+                marker.scale.z = DSCALE
+
+            ## uniform all markers' size
+            #for m in self.markers.markers:
+            #    m.scale = marker.scale
 
         # publish marker(s) at 10hz
         now = rospy.Time.from_sec(time.time())
@@ -501,7 +512,6 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
             self.publish_menu(self.current_index)
         pre_pose = self.pre_pose
         marker = self.current_marker
-        samples = []
         if self.current_marker == None:
             marker = copy.deepcopy(self.handle_marker)
             marker.ns = "target"
@@ -512,8 +522,6 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
         marker.scale = self.handle_marker.scale
         marker.pose.orientation = self.handle_marker.pose.orientation
         axis = self.axis_marker.pose.orientation
-        #q = numpy.array((axis.x, axis.y, axis.z, axis.w))
-        #drct = tf.transformations.euler_from_quaternion(q)
         drct = numpy.array((2 * (axis.x * axis.z - axis.y * axis.w),
                             2 * (axis.y * axis.z - axis.x * axis.w),
                             1 - 2 * (axis.x * axis.x + axis.y * axis.y)))
@@ -527,9 +535,9 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
         if history.length() > 0:
             latest = history.latest()
             if status.R3 and status.L2 and status.R2 and not (latest.R3 and latest.L2 and latest.R2):
-                self.view_controller.followView(not view_controller.followView())
-        if self.view_controller.control_view:
-            self.view_controller.joyCB(status, history)
+                self.followView(not self.followView())
+        if self.control_view:
+            RVizViewController.joyCB(self, status, history)
 
         if not status.R3:
             if status.up:
@@ -559,44 +567,139 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
                 self.mode = self.MODE_MENU
                 self.publish_menu(self.current_index)
             elif history.new(status, "circle"):
-                for m in self.markers.markers:
-                    if m.ns == "sample":
-                        m.action = Marker.DELETE
-                self.publish_markers()
-                d_list = []
-                for m in self.markers.markers:
-                    if m.ns == "sample":
-                        d_list.append(m)
-                for m in d_list:
-                    self.markers.markers.remove(m)
-                a_sign = 1
-                if self.angle < 0.0:
-                    a_sign = -1
-                sample_id = 0
-                current_rad = self.sample_rad
-                while current_rad < self.angle * a_sign:
-                    sample_marker = copy.deepcopy(self.handle_marker)
-                    sample_marker.ns = "sample"
-                    self.set_color(sample_marker, highlight=True)
-                    sample_marker.color.a = 0.7
-                    sample_marker.id = sample_id
-                    mat = tf.transformations.rotation_matrix(current_rad * a_sign, drct, p0)
-                    sp = numpy.dot(mat, handle_p)
-                    sample_marker.pose.position.x = sp[0]
-                    sample_marker.pose.position.y = sp[1]
-                    sample_marker.pose.position.z = sp[2]
-                    self.markers.markers.append(sample_marker)
-                    current_rad += self.sample_rad
-                    sample_id += 1
-                sample_marker = copy.deepcopy(self.current_marker)
-                sample_marker.ns = "sample"
-                self.set_color(sample_marker, highlight=True)
-                sample_marker.color.a = 0.7
-                sample_marker.id = sample_id
-                self.markers.markers.append(sample_marker)
+                self.generate_samples()
+            if history.new(status, "triangle"):
+                self.generate_samples()
+                self.init_manip_pose(self.current_marker)
+                self.mode = self.MODE_MANIP
+                self.publish_help()
 
         self.publish_markers()
 
+    def generate_samples(self):
+        for m in self.markers.markers:
+            if m.ns == "sample":
+                m.action = Marker.DELETE
+        self.publish_markers()
+        d_list = []
+        for m in self.markers.markers:
+            if m.ns == "sample":
+                d_list.append(m)
+        for m in d_list:
+            self.markers.markers.remove(m)
+
+        handle_p = numpy.array((self.handle_marker.pose.position.x,
+                                self.handle_marker.pose.position.y,
+                                self.handle_marker.pose.position.z, 1.0))
+        axis = self.axis_marker.pose.orientation
+        drct = numpy.array((2 * (axis.x * axis.z - axis.y * axis.w),
+                            2 * (axis.y * axis.z - axis.x * axis.w),
+                            1 - 2 * (axis.x * axis.x + axis.y * axis.y)))
+        origin = self.axis_marker.pose.position
+        p0 = numpy.array((origin.x, origin.y, origin.z))
+
+        a_sign = 1
+        if self.angle < 0.0:
+            a_sign = -1
+        sample_id = 0
+        current_rad = self.sample_rad
+        while current_rad < self.angle * a_sign:
+            sample_marker = copy.deepcopy(self.handle_marker)
+            sample_marker.ns = "sample"
+            self.set_color(sample_marker, highlight=True)
+            sample_marker.color.a = 0.7
+            sample_marker.id = sample_id
+            mat = tf.transformations.rotation_matrix(current_rad * a_sign, drct, p0)
+            sp = numpy.dot(mat, handle_p)
+            sample_marker.pose.position.x = sp[0]
+            sample_marker.pose.position.y = sp[1]
+            sample_marker.pose.position.z = sp[2]
+            self.markers.markers.append(sample_marker)
+            current_rad += self.sample_rad
+            sample_id += 1
+        sample_marker = copy.deepcopy(self.current_marker)
+        sample_marker.ns = "sample"
+        self.set_color(sample_marker, highlight=True)
+        sample_marker.color.a = 0.7
+        sample_marker.id = sample_id
+        self.markers.markers.append(sample_marker)
+
+    def init_manip_pose(self, marker):
+        if self.manip_pose == None:
+            self.manip_pose = PoseStamped()
+            self.manip_pose.header = copy.deepcopy(marker.header)
+            self.manip_pose.pose = copy.deepcopy(marker.pose)
+        else:
+            #TODO
+            return
+
+    def manip_joy_cb(self, status, history):
+        self.pre_pose = self.manip_pose
+        self.pose_joy_cb(status, history)
+        self.manip_pose = copy.deepcopy(self.pre_pose)
+
+        # process command keys
+        if not (status.R3 and status.R2 and status.L2):
+            if status.L1:
+                # assoc mode
+                if history.new(status, "up") or history.new(status, "left"):
+                    self.selecting_index = self.selecting_index - 1
+                    if self.selecting_index < 0:
+                        self.selecting_index = len(self.markers.markers) - 1
+                    self.switch_marker(self.selecting_index)
+                elif history.new(status, "down") or history.new(status, "right"):
+                    self.selecting_index = self.selecting_index + 1
+                    if self.selecting_index >= len(self.markers.markers):
+                        self.selecting_index = 0
+                    self.switch_marker(self.selecting_index)
+                if history.new(status, "triangle"):
+                    if self.assoc_flag:
+                        self.publish_marker_command(self.current_marker, "ASSOC_PREVIEW")
+                    else:
+                        rospy.logwarn("Please assoc current pose after initial preview.")
+                if history.new(status, "square"):
+                    # Reset manip pose
+                    self.manip_pose = None
+                    self.init_manip_pose(self.current_marker)
+                if history.new(status, "start"):
+                    self.publish_marker_command(self.current_marker, "ASSOC_EXECUTE")
+
+            else:
+                if history.new(status, "triangle"):
+                    self.assoc_flag = False
+                    self.publish_pose_command(self.manip_pose, "PREVIEW")
+                elif history.new(status, "circle"):
+                    self.assoc_flag = True
+                    self.publish_marker_command(self.current_marker, "ASSOC")
+                elif history.new(status, "start") and not status.select:
+                    self.publish_marker_command(self.current_marker, "EXECUTE")
+                # Delete reset manip for conflicting with ipega home setting (select+start)
+                #elif history.new(status, "select"):
+                #    self.publish_marker_command(self.current_marker, "RESET_MANIP")
+                if history.new(status, "cross"):
+                    self.mode = self.MODE_MENU
+                    self.publish_menu(self.selecting_index)
+                    self.publish_help()
+                    self.switch_marker(self.selecting_index)
+                    self.publish_markers()
+
+        # publish at 30hz
+        if self.publish_pose:
+            now = rospy.Time.from_sec(time.time())
+            # placement.time_from_start = now - self.prev_time
+            if (now - self.prev_time).to_sec() > 1 / 30.0:
+                self.pose_pub.publish(self.pre_pose)
+                self.prev_time = now
+
+    def publish_pose_command(self, pose, command):
+        self.target_pub.publish(pose)
+        self.command_pub.publish(command)
+
+    def publish_marker_command(self, marker, command):
+        pose = PoseStamped()
+        pose.pose = marker.pose
+        pose.header = marker.header
+        self.publish_pose_command(pose, command)
 
     def init_marker(self):
         self.pre_marker = copy.deepcopy(self.current_marker)
@@ -675,10 +778,9 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
 Up/Down: Choose item
 Triangle: Show markers' route
 Triangle + Up/Down: Change order
-Triangle + R1: [WIP] Preview IK for current marker
 Square: Delete current marker
 Circle: Add new / Edite existing marker
-Start: [WIP] Execute 
+Start: Execute Mode (Not yet)
             """
         elif self.mode == self.MODE_MARKER:
             text.height = 342
@@ -687,18 +789,53 @@ Left Analog: Translate xy
 D-pad: Rotate pitch/roll
 R1 + Left/Right: Rotate yaw
 L1 + Up/Down: Change marker hight (z)
-L1 + Left/Right: Cchange marker y size
+L1 + Left/Right: Change marker y size
+L2/R2: Translate z
+Square(Hold): Move faster
+
+Right Analog: Yaw/pitch of camera position
+R3(Hold) + arrow buttons/sticks: Move camera
+R3 + L2+R2: Enable follow view mode
+
+Select: Load from bounding box
+Circle: Save and quit
+Cross: Quit (without saving)
+            """
+        elif self.mode == self.MODE_OPERATE:
+            text.height = 342
+            text.text = """Joy Control Help
+D-pad Up/Down: Move handle end postision
+Square(Hold): Move faster
+
+Right Analog: Yaw/pitch of camera position
+R3(Hold) + arrow buttons/sticks: Move camera
+R3 + L2+R2: Enable follow view mode
+
+Select: Load from bounding box
+Circle: Generate track
+Triangle: Switch to manip mode
+Cross: Quit (without saving)
+            """
+        elif self.mode == self.MODE_MANIP:
+            text.height = 382
+            text.text = """Joy Control Help
+Left Analog: Translate xy
+D-pad: Rotate pitch/roll
+R1 + Left/Right: Rotate yaw
+L1 + Up/Down: Change marker hight (z)
+L1 + Left/Right: Change marker y size
 L2/R2: Translate z
 Square(Hold): Move faster
 
 Right Analog: yaw/pitch of camera position
-R3(Hold): suppressing buttons/sticks for controlling pose
+R3(Hold) + arrow buttons/sticks: Move camera
 R3 + L2+R2: enable follow view mode
 
-Select: [WIP] Load from bounding box
-Triangle: [WIP] Preview IK
-Circle: Save and goto the next
-Cross: Quit (without saving)
+Triangle: Preview IK for current pose
+Circle: Bind current pose to object
+L1 + Triangle: Preview IK for current object
+L1 + Circle: Excute current IK
+Select: Reset robot pose
             """
         elif self.mode == self.MODE_UNSAVED or self.mode == self.MODE_DELETE:
             text.height = 77
