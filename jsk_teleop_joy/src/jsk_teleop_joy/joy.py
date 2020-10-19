@@ -16,7 +16,7 @@ except:
 from sensor_msgs.msg import Joy
 from diagnostic_msgs.msg import DiagnosticStatus, DiagnosticArray
 import tf.transformations
-from joy_status import IpegaStatus, XBoxStatus, PS3Status, PS3WiredStatus
+from joy_status import IpegaStatus, XBoxStatus, PS3Status, PS3WiredStatus, VirtualStatus
 from jsk_rviz_plugins.msg import OverlayMenu
 from plugin_manager import PluginManager
 from status_history import StatusHistory
@@ -40,6 +40,9 @@ def autoJoyDetect(msg):
   elif len(msg.axes) == 8 and (len(msg.buttons) == 16 or len(msg.buttons) == 19):
     rospy.loginfo("auto detected as ipega")
     AUTO_DETECTED_CLASS = IpegaStatus
+  elif len(msg.axes) == 2 and (len(msg.buttons) == 18):
+    rospy.loginfo("auto detected as virtual joystick")
+    AUTO_DETECTED_CLASS = VirtualStatus
   else:
     AUTO_DETECTED_CLASS = "UNKNOWN"
 
