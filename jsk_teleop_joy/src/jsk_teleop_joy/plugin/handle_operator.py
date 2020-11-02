@@ -423,6 +423,7 @@ sample_rad [float, defaulf: 0.3]: difference in rad of samples
         marker.pose = self.pre_pose.pose
 
         # scale
+        DSCALE = 0.002
         if not status.R3 and status.L1:
             # scale xy
             if status.square:
